@@ -11,7 +11,7 @@ available host tools. Do not hand the user a command checklist as a substitute.
 Reuse the current session's authorization, server, native/container choice,
 workspace and account information. Do not ask again for known answers. Inspect
 first: local OS/architecture, installed clients, existing authenticated SSH,
-remote `/etc/os-release`, memory/disk, listeners, firewall and existing xrdp.
+remote `/etc/os-release`, memory/disk, listeners, firewall, existing xrdp and system timezone/NTP state. Reuse a known datacenter region; a current OS timezone is not proof of its location.
 Read-only helper:
 
 ```text
@@ -72,6 +72,13 @@ its dependent stages require new observations. A changed clipboard choice also
 makes mismatched desktop evidence stale. Save/re-record the selected mode and
 rerun its dependent acceptance before declaring completion.
 
+Select the confirmed datacenter timezone with `init --timezone IANA_ZONE`, or
+`set-timezone --state STATE_FILE --timezone IANA_ZONE` for an existing journal.
+There is no Windows/local or IP-geolocation default. The `timezone` evidence must
+name that selection; an unselected journal can record it only with confirmed
+region evidence. Old journals must complete this new stage before desktop and
+its dependents can count as verified. See [timezone.md](timezone.md).
+
 Work on the returned ready stages. Record actual observations with an evidence
 JSON containing `observed_at`, `source` (sanitized command or artifact reference)
 and `checks` booleans named in `next`. Each required boolean must be true to mark
@@ -95,7 +102,15 @@ completion.
    architecture, existing services, capacity and chosen workspace. Verify bundle
    integrity with `verify_bundle.py` before executing bundled programs. Choose the
    OS-specific path; do not run apt scripts against CentOS.
-2. **Tailscale.** Install from official packages only if absent. For CentOS Stream
+2. **Timezone.** Follow [timezone.md](timezone.md): select the confirmed datacenter
+   IANA zone, preview/apply it on Linux and read back system timezone/NTP state.
+   Check XFCE/Claude overrides and record whether actual browser timezone was
+   verified or still needs refresh. Keep the local Windows zone unchanged; never
+   default to its timezone or hardcode a previous server's region. Missing location
+   is a necessary input, while independent stages may continue. This stage uses
+   `timezone_config.py` separately from the desktop bootstrap, also for an existing
+   active installation; no installer rerun or forced session restart is needed.
+3. **Tailscale.** Install from official packages only if absent. For CentOS Stream
    9 use the official `https://pkgs.tailscale.com/stable/centos/9/tailscale.repo`
    repository with repository/package GPG checking. For Ubuntu follow the actual
    release's documented repository. For Windows use the official installer or
@@ -107,9 +122,9 @@ completion.
    `BackendState` values and tailnet membership. Never infer joining from a
    console screenshot alone. Use `tailscale_policy.py discover --server-name
    ACTUAL_NAME` on Windows (or `--server-ip ACTUAL_VPN_IP`) to obtain exact addresses.
-3. **Policy.** Execute the complete transaction below, including saved-policy
+4. **Policy.** Execute the complete transaction below, including saved-policy
    readback. Creating a fragment or receiving "saved" is not enough.
-4. **Desktop.** Use `ubuntu-desktop.sh` for Ubuntu 22.04/24.04 or the authorized
+5. **Desktop.** Use `ubuntu-desktop.sh` for Ubuntu 22.04/24.04 or the authorized
    `centos-desktop.sh` adaptation for CentOS Stream 9 x86_64. Create a non-root
    desktop user only when absent; reuse an existing intended user. Keep a newly
    generated desktop password outside chat/logs/workspaces and show it only via
@@ -129,13 +144,13 @@ completion.
    Keep Electron's sandbox enabled; do not work around failures with --no-sandbox
    or by disabling SELinux. Missing dependencies or unsupported systems stop only
    the affected stage and require a concrete diagnosis.
-5. **Pairing.** Follow operations.md's CSR flow automatically: install binaries,
+6. **Pairing.** Follow operations.md's CSR flow automatically: install binaries,
    generate keys on their owning machines, transfer only CSR/public certs,
    approve, compare fingerprints, generate configs and run agent `--check`.
    Reuse a verified valid pairing on resume. Never copy Windows CA/agent private
    keys to Linux or Linux client private keys to Windows. `configure.py` accepts
    `--server-ip` as an alias of the historical `--ubuntu-ip` argument.
-6. **Firewall.** Inspect complete effective rules and IPv6. Use
+7. **Firewall.** Inspect complete effective rules and IPv6. Use
    `windows-firewall.ps1 -GuardBroadRules` when exact program-scoped deny rules
    are needed to override an existing generic allow, such as Tailscale's inbound
    rule. This complements the exact allow and leaves unrelated rules intact.
@@ -143,25 +158,25 @@ completion.
    `-EnableDisabledProfiles`; prepare a before-state backup. Never bypass a UAC
    prompt. Do not open public 3389/7443 or close other services' ports. Verify
    resulting effective rules instead of treating exit code zero as proof.
-7. **Claude.** Launch the actual GUI as the desktop user, obtain the real config
+8. **Claude.** Launch the actual GUI as the desktop user, obtain the real config
    path, back up and merge only `mcpServers.my-windows-pc`. Preserve all other MCP
    entries. Complete account login in the user's browser, restart the app if
    needed and observe real tool discovery. Process startup and stdio schema
    output alone do not verify Claude integration.
-8. **Launcher.** Follow [launcher.md](launcher.md). Configure the chosen Linux
+9. **Launcher.** Follow [launcher.md](launcher.md). Configure the chosen Linux
    user's login/reconnect helper (already part of new desktop installations),
    generate the personalized Windows double-click kit from the existing agent
    config and matching clipboard choice, and expose its CMD entry locally. No
    SSH password, new SSH grant, key or control URL is embedded. Reuse a matching
    agent rather than spawning a duplicate; keep its authorization state unchanged.
    Record the `launcher` stage only after these observations.
-9. **Local session.** Use `start-windows-agent.ps1 -Config CONFIG` to isolate
+10. **Local session.** Use `start-windows-agent.ps1 -Config CONFIG` to isolate
    inherited PowerShell module paths; launch the agent visibly, paused, and
    open its private localhost page only on that Windows computer. Ask for local
    time-limited enable; a remote request cannot authorize itself. Installation
    automation does not mean perpetual desktop-control authorization. Keep the
    private control URL out of output, transcripts, files and remote config.
-10. **Acceptance.** Run verification.md's real file roundtrip, harmless exec,
+11. **Acceptance.** Run verification.md's real file roundtrip, harmless exec,
    fresh-frame GUI input, source/identity rejection and stop/pause checks. Start
    with an approved disposable window. Record failures and untested scenarios
    honestly. Stop/pause after the acceptance test unless the user asked to keep a

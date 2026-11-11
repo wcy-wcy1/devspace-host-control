@@ -15,6 +15,15 @@
 3. Default agent startup must remain paused. Local enable admits authorized calls; expiry rejects new calls. Pause cancels tasks. Revocation survives restart. Wrong/empty configuration must not start a wildcard listener.
 4. Confirm RDP clipboard matches the configured mode: text-only by default with clipboard file/image formats denied, or explicitly disabled. Confirm drive/device sharing remains unavailable. Test a harmless clipboard marker only after saving work, logging out and reconnecting with the matching client file. Do not inspect existing clipboard contents. Check that Linux was not given a LAN route or configured to use the local machine as an exit node.
 
+## Server and application timezone
+
+Confirm the selected IANA zone comes from the user's chosen datacenter region.
+Read back system zone and NTP state separately, inspect selected-user XFCE/Claude
+TZ/clock overrides, then compare the actual refreshed application/browser time.
+No environment override does not prove Chromium caches were refreshed. Record
+pending refresh/reopen honestly; keep Windows timezone and active sessions intact.
+See [timezone.md](timezone.md).
+
 ## Real tool scenarios
 
 1. Discover tools inside the actual Ubuntu Claude Desktop client. Read anonymous host status after local session authorization.

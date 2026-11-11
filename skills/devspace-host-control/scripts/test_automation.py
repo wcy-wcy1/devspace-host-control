@@ -211,6 +211,8 @@ class JournalTests(unittest.TestCase):
                   'observed_at': '2026-01-01T00:00:00+00:00', 'source': 'offline test fixture'}
         if stage == 'desktop':
             result['clipboard_mode'] = 'text'
+        if stage == 'timezone':
+            result['timezone'] = 'America/Los_Angeles'
         return result
 
     def test_legacy_desktop_evidence_requires_new_acceptance(self):
@@ -232,7 +234,7 @@ class JournalTests(unittest.TestCase):
 
     def test_clipboard_choice_must_match_desktop_evidence(self):
         state = {'clipboard': 'disabled', 'stages': {}}
-        for stage in ('discovery', 'tailscale', 'policy'):
+        for stage in ('discovery', 'timezone', 'tailscale', 'policy'):
             automation.record(state, stage, self.evidence(stage))
         with self.assertRaisesRegex(ValueError, 'clipboard_mode'):
             automation.record(state, 'desktop', self.evidence('desktop'))
@@ -255,6 +257,31 @@ class JournalTests(unittest.TestCase):
         self.assertFalse(automation.next_steps(state)['complete'])
         self.assertNotIn('acceptance', state['stages'])
         self.assertNotIn('policy', state['stages'])
+
+    def test_datacenter_timezone_change_invalidates_desktop_but_keeps_pairing(self):
+        state = {'stages': {}}
+        for stage in automation.STAGES:
+            automation.record(state, stage, self.evidence(stage))
+        automation.select_timezone(state, 'Europe/Berlin')
+        self.assertIn('pairing', automation.verified_stages(state))
+        self.assertNotIn('desktop', state['stages'])
+        self.assertNotIn('acceptance', state['stages'])
+        with self.assertRaisesRegex(ValueError, 'differs'):
+            automation.record(state, 'timezone', self.evidence('timezone'))
+        evidence = self.evidence('timezone')
+        evidence['timezone'] = 'Europe/Berlin'
+        automation.record(state, 'timezone', evidence)
+        self.assertIn('desktop', automation.next_steps(state)['ready'])
+
+    def test_legacy_completion_without_timezone_needs_new_observations(self):
+        state = {'stages': {}}
+        for stage in automation.STAGES:
+            automation.record(state, stage, self.evidence(stage))
+        del state['stages']['timezone']
+        state.pop('server_timezone')
+        self.assertFalse(automation.next_steps(state)['complete'])
+        self.assertIn('timezone', automation.next_steps(state)['ready'])
+        self.assertNotIn('desktop', automation.verified_stages(state))
 
     def test_missing_evidence_rejected(self):
         with self.assertRaises(ValueError):

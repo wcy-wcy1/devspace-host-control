@@ -13,6 +13,7 @@ REQUIRED_SKILL_FILES = (
     'scripts/linux_session.py', 'scripts/launcher.py', 'scripts/claude_session.py',
     'scripts/start-hostcontrol.ps1', 'scripts/start-windows-agent.ps1',
     'scripts/windows-firewall.ps1', 'scripts/ubuntu-desktop.sh', 'scripts/centos-desktop.sh',
+    'scripts/timezone_config.py', 'references/timezone.md',
 )
 
 

@@ -8,9 +8,9 @@
 
 **自动部署 · 断点续跑 · 双击启动 · 18 个 MCP 工具**
 
-[![CI](https://github.com/wcy-wcy1/devspace-host-control/actions/workflows/ci.yml/badge.svg)](https://github.com/wcy-wcy1/devspace-host-control/actions/workflows/ci.yml) [![Version](https://img.shields.io/badge/v0.2.0--beta.1-development-0f766e)](https://github.com/wcy-wcy1/devspace-host-control/releases/tag/v0.2.0-beta.1) [![MCP](https://img.shields.io/badge/MCP-18_tools-2563eb)](#mcp-tools) [![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](hostcontrol/go.mod) [![License](https://img.shields.io/badge/License-Apache_2.0-c28a36)](LICENSE)
+[![CI](https://github.com/wcy-wcy1/devspace-host-control/actions/workflows/ci.yml/badge.svg)](https://github.com/wcy-wcy1/devspace-host-control/actions/workflows/ci.yml) [![Version](https://img.shields.io/badge/v0.2.0--beta.2-development-0f766e)](https://github.com/wcy-wcy1/devspace-host-control/releases/tag/v0.2.0-beta.2) [![MCP](https://img.shields.io/badge/MCP-18_tools-2563eb)](#mcp-tools) [![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](hostcontrol/go.mod) [![License](https://img.shields.io/badge/License-Apache_2.0-c28a36)](LICENSE)
 
-[**下载新版 Skill**](https://github.com/wcy-wcy1/devspace-host-control/releases/download/v0.2.0-beta.1/devspace-host-control.zip) · [快速开始](#quick-start) · [双击启动](#one-click) · [系统架构](#architecture) · [验证记录](#verification)
+[**下载新版 Skill**](https://github.com/wcy-wcy1/devspace-host-control/releases/download/v0.2.0-beta.2/devspace-host-control.zip) · [快速开始](#quick-start) · [双击启动](#one-click) · [系统架构](#architecture) · [验证记录](#verification)
 
 <sub>Linux 上运行 Claude Desktop，Windows 上执行文件、命令与桌面操作。<br/>精确设备配对，双向证书认证，控制会话由本机限时开启。</sub>
 
@@ -58,7 +58,7 @@ DevSpace Host Control 将 **Go 主机控制模块**和**自包含 Codex Skill**�
 </table>
 
 > [!IMPORTANT]
-> **v0.2.0-beta.1 是开发验证版本。** 已有一次 CentOS 原机部署经验；新版离线测试与运行程序完整性检查通过。完整新装、一键入口的真实冷启动/重连、实际键鼠操作仍需现场验收。[查看验证范围 →](#verification)
+> **v0.2.0-beta.2 是开发验证版本。** 已有一次 CentOS 原机部署经验；新版离线测试与运行程序完整性检查通过。完整新装、一键入口的真实冷启动/重连、实际键鼠操作仍需现场验收。[查看验证范围 →](#verification)
 
 <a id="quick-start"></a>
 ## 快速开始
@@ -67,9 +67,9 @@ DevSpace Host Control 将 **Go 主机控制模块**和**自包含 Codex Skill**�
 
 | 下载 | 内容 |
 | :--- | :--- |
-| [**devspace-host-control.zip**](https://github.com/wcy-wcy1/devspace-host-control/releases/download/v0.2.0-beta.1/devspace-host-control.zip) | 自包含 Skill：运行程序、源码、自动化、安装与启动脚本、排错指南 |
-| [devspace-hostcontrol-source.zip](https://github.com/wcy-wcy1/devspace-host-control/releases/download/v0.2.0-beta.1/devspace-hostcontrol-source.zip) | 独立 Go 模块源码，适合研究和二次开发 |
-| [SHA256SUMS.txt](https://github.com/wcy-wcy1/devspace-host-control/releases/download/v0.2.0-beta.1/SHA256SUMS.txt) | 两个压缩包的 SHA256 校验值 |
+| [**devspace-host-control.zip**](https://github.com/wcy-wcy1/devspace-host-control/releases/download/v0.2.0-beta.2/devspace-host-control.zip) | 自包含 Skill：运行程序、源码、自动化、安装与启动脚本、排错指南 |
+| [devspace-hostcontrol-source.zip](https://github.com/wcy-wcy1/devspace-host-control/releases/download/v0.2.0-beta.2/devspace-hostcontrol-source.zip) | 独立 Go 模块源码，适合研究和二次开发 |
+| [SHA256SUMS.txt](https://github.com/wcy-wcy1/devspace-host-control/releases/download/v0.2.0-beta.2/SHA256SUMS.txt) | 两个压缩包的 SHA256 校验值 |
 
 也可以直接使用仓库中的完整 Skill：
 
@@ -106,6 +106,8 @@ Expand-Archive -LiteralPath ./devspace-host-control.zip -DestinationPath $skillB
 | **Windows 执行端** | Windows amd64，交互式登录会话 | Tailscale、RDP 客户端、`hostagent.exe`、`hostctl.exe` |
 
 Claude Desktop 官方不支持 CentOS，本项目提供兼容适配；Ubuntu 仍是主要安装路径。Go 成品运行不需要 Go SDK、Docker 或 Kubernetes，部署脚本另需 Python 3、Bash / PowerShell。
+
+部署时还会核对**机房时区**：按用户确认的机房地区选择 IANA 时区，让 Linux 系统、远程桌面和 Claude 跟随它；不会照搬 Windows 本机时区。会单独检查 NTP、应用覆盖与浏览器缓存。[时区配置指南 →](skills/devspace-host-control/references/timezone.md)
 
 📖 [自动化与续跑](skills/devspace-host-control/references/automation.md) · [部署与证书配对](skills/devspace-host-control/references/operations.md) · [安装故障诊断](skills/devspace-host-control/references/troubleshooting.md)
 
@@ -218,8 +220,8 @@ flowchart LR
 
 | 验证层次 | 结果 |
 | :--- | :--- |
-| **Windows 离线测试** | **58 通过，0 跳过**；新启动模拟同时覆盖 PowerShell 7 与 Windows PowerShell 5.1 |
-| **CentOS 隔离测试** | **52 通过，6 跳过**；跳过 Windows / PowerShell 专属场景 |
+| **Windows 离线测试** | **66 通过，0 跳过**；新启动模拟同时覆盖 PowerShell 7 与 Windows PowerShell 5.1 |
+| **CentOS 隔离测试** | **60 通过，6 跳过**；跳过 Windows / PowerShell 专属场景 |
 | **脚本与成品完整性** | Bash/PowerShell 语法与安装预览通过；6 个运行程序哈希/架构通过；32 个 Go 源码镜像一致 |
 | **已有现场记录** | RDP 登录、Claude 账号登录与 MCP 连接日志、Windows 文件操作、命令执行、窗口截图 |
 | **启动器现场配置** | 登录/重连钩子应用及重复应用通过；识别现有代理，Claude helper 返回 `already_running` |
@@ -295,6 +297,6 @@ python scripts/package.py
 
 **从一次配置，到下一次双击。**
 
-[下载 Skill](https://github.com/wcy-wcy1/devspace-host-control/releases/tag/v0.2.0-beta.1) · [阅读自动化指南](skills/devspace-host-control/references/automation.md) · [反馈问题](https://github.com/wcy-wcy1/devspace-host-control/issues)
+[下载 Skill](https://github.com/wcy-wcy1/devspace-host-control/releases/tag/v0.2.0-beta.2) · [阅读自动化指南](skills/devspace-host-control/references/automation.md) · [反馈问题](https://github.com/wcy-wcy1/devspace-host-control/issues)
 
 </div>

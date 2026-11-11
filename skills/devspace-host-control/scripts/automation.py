@@ -16,9 +16,12 @@ import shutil
 import subprocess
 import sys
 import uuid
+from timezone_config import timezone_name
 
 STAGES = {
     'discovery': ('authorized_target', 'os_arch_observed', 'existing_services_observed', 'workspace_chosen'),
+    'timezone': ('datacenter_timezone_confirmed', 'system_timezone_matches', 'ntp_state_observed',
+                 'session_overrides_checked', 'application_refresh_status_recorded'),
     'tailscale': ('windows_running', 'server_running', 'same_tailnet', 'exact_ips_observed'),
     'policy': ('complete_policy_read', 'no_conflicting_allow', 'saved_policy_read_back'),
     'desktop': ('packages_installed', 'rdp_vpn_bound', 'rdp_source_guard',
@@ -32,8 +35,8 @@ STAGES = {
     'acceptance': ('file_roundtrip', 'harmless_exec', 'fresh_frame_gui_input', 'network_denials', 'stop_verified'),
 }
 DEPENDENCIES = {
-    'discovery': (), 'tailscale': ('discovery',), 'policy': ('tailscale',),
-    'desktop': ('discovery', 'policy'), 'pairing': ('tailscale',),
+    'discovery': (), 'timezone': ('discovery',), 'tailscale': ('discovery',), 'policy': ('tailscale',),
+    'desktop': ('discovery', 'policy', 'timezone'), 'pairing': ('tailscale',),
     'firewall': ('pairing', 'desktop'), 'claude': ('desktop', 'pairing', 'firewall'),
     'launcher': ('claude',), 'session': ('launcher',), 'acceptance': ('session',),
 }
@@ -83,6 +86,8 @@ def load(path):
     no_secrets(document)
     if document.get('clipboard', 'text') not in ('text', 'disabled'):
         raise ValueError('Unsupported clipboard mode in deployment journal')
+    if document.get('server_timezone'):
+        timezone_name(document['server_timezone'])
     return document
 
 
@@ -91,6 +96,8 @@ def observed(state, stage, evidence):
     return (isinstance(checks, dict)
             and all(checks.get(check) is True for check in STAGES[stage])
             and bool(evidence.get('observed_at') and evidence.get('source'))
+            and (stage != 'timezone' or (bool(state.get('server_timezone'))
+                 and evidence.get('timezone') == state['server_timezone']))
             and (stage != 'desktop' or evidence.get('clipboard_mode') == state.get('clipboard', 'text')))
 
 
@@ -104,6 +111,19 @@ def verified_stages(state):
                 and observed(state, stage, item.get('evidence', {}))):
             verified.add(stage)
     return verified
+
+
+def select_timezone(state, value):
+    value = timezone_name(value)
+    if state.get('server_timezone') != value:
+        invalidated = {'timezone'}
+        for stage in STAGES:
+            if stage == 'timezone' or any(dep in invalidated for dep in DEPENDENCIES[stage]):
+                invalidated.add(stage)
+                state.get('stages', {}).pop(stage, None)
+        state['server_timezone'] = value
+        state['updated_at'] = now()
+    return state
 
 
 def record(state, stage, evidence, status='verified'):
@@ -123,6 +143,11 @@ def record(state, stage, evidence, status='verified'):
             raise ValueError('Record observation time and a command/artifact reference, without secrets')
         if stage == 'desktop' and evidence.get('clipboard_mode') != state.get('clipboard', 'text'):
             raise ValueError('Desktop evidence must name the currently selected clipboard_mode')
+        if stage == 'timezone':
+            selected = timezone_name(evidence.get('timezone'))
+            if state.get('server_timezone') and selected != state['server_timezone']:
+                raise ValueError('Timezone evidence differs from the selected datacenter timezone')
+            state['server_timezone'] = selected
     stages = state.setdefault('stages', {})
     # Changing a prerequisite invalidates dependent observations, recursively.
     invalidated = {stage}
@@ -141,6 +166,7 @@ def next_steps(state):
     ready = [stage for stage in pending if all(dep in verified for dep in DEPENDENCIES[stage])]
     return {'complete': not pending, 'ready': ready, 'pending': pending,
             'clipboard': state.get('clipboard', 'text'),
+            'server_timezone': state.get('server_timezone'),
             'checks': {stage: list(STAGES[stage]) for stage in ready},
             'resume_rule': 'Re-observe live addresses, policy, listeners and session state before reusing journal evidence.'}
 
@@ -195,7 +221,8 @@ print(json.dumps({'os':release.get('ID'),'version':release.get('VERSION_ID'),
  'architecture':platform.machine(),'tailscale_state':ts.get('BackendState'),
  'tailscale_ips':ts.get('TailscaleIPs') or [],'tailnet':(ts.get('CurrentTailnet') or {}).get('Name'),
  'listeners':cmd(['ss','-lnt']),'rdp_active':cmd(['systemctl','is-active','xrdp']).strip(),
- 'disk':cmd(['df','-h','/']),'memory':cmd(['free','-m'])}))
+ 'disk':cmd(['df','-h','/']),'memory':cmd(['free','-m']),
+ 'timezone_observed':cmd(['timedatectl','show','--property=Timezone','--property=NTPSynchronized'])}))
 '''
 
 
@@ -226,9 +253,12 @@ def main():
     p.add_argument('--desktop-user', default='hostcontrol')
     p.add_argument('--session-minutes', type=int, default=30)
     p.add_argument('--clipboard', choices=('text', 'disabled'), default='text')
-    for name in ('next', 'record'):
+    p.add_argument('--timezone', type=timezone_name)
+    for name in ('next', 'record', 'set-timezone'):
         p = sub.add_parser(name)
         p.add_argument('--state', required=True)
+        if name == 'set-timezone':
+            p.add_argument('--timezone', type=timezone_name, required=True)
         if name == 'record':
             p.add_argument('--stage', choices=STAGES, required=True)
             p.add_argument('--evidence', required=True)
@@ -252,10 +282,15 @@ def main():
                  'desktop_user': args.desktop_user, 'session_minutes': args.session_minutes,
                  'clipboard': args.clipboard,
                  'stages': {}}
+        if args.timezone:
+            select_timezone(state, args.timezone)
         save(args.state, state)
         print(json.dumps(next_steps(state), indent=2))
     else:
         state = load(args.state)
+        if args.mode == 'set-timezone':
+            select_timezone(state, args.timezone)
+            save(args.state, state)
         if args.mode == 'record':
             evidence = json.loads(Path(args.evidence).read_text(encoding='utf-8-sig'))
             record(state, args.stage, evidence, args.status)

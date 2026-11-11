@@ -19,6 +19,8 @@ Ubuntu desktop is the controller; Windows is the actual controlled desktop. Ubun
 
 Discover OS/architecture, exact Tailscale IPs and existing services through authenticated tools. Reuse known workspace choices and use the 30-minute default unless the user specifies otherwise. Ask only for necessary values that cannot be discovered. Tailscale/Claude login and system authorization may require interactive action.
 
+Before desktop configuration, follow [timezone.md](timezone.md) to align Linux with the confirmed datacenter region and inspect desktop/Claude overrides. Reuse existing region choices; do not synchronize to the Windows machine's zone.
+
 Install Tailscale from its official distribution. For Ubuntu, resolve `/etc/os-release` and use the documented repository for that codename. Do not invent package URLs for unsupported releases. Official reference: https://tailscale.com/kb/1031/install-linux . On Windows use the official installer: https://tailscale.com/download/windows . Joining a tailnet alone does not restrict access.
 
 Use `tailscale_policy.py` as described in [automation.md](automation.md) to read the full JSON/HuJSON policy, plan exact grants, preserve unrelated metadata and provably disjoint business grants, conditionally save once and verify readback. Both installers use its read-only `audit` command on the reviewed full policy. Unsupported or overlapping rules stop deployment for review; no unrelated rule is deleted automatically. The historical `configure.py policy` command only generates a fragment, and its `check-policy` command deliberately accepts only two grants; these are not substitutes for the full transaction or live readback.
