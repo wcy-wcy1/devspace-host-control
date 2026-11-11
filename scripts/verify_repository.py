@@ -7,6 +7,13 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SKILL = ROOT / 'skills/devspace-host-control'
 IGNORED = {'__pycache__', '.git', 'dist'}
+REQUIRED_SKILL_FILES = (
+    'references/automation.md', 'references/troubleshooting.md', 'references/launcher.md',
+    'scripts/automation.py', 'scripts/tailscale_policy.py', 'scripts/desktop_config.py',
+    'scripts/linux_session.py', 'scripts/launcher.py', 'scripts/claude_session.py',
+    'scripts/start-hostcontrol.ps1', 'scripts/start-windows-agent.ps1',
+    'scripts/windows-firewall.ps1', 'scripts/ubuntu-desktop.sh', 'scripts/centos-desktop.sh',
+)
 
 
 def source_files(root):
@@ -16,6 +23,9 @@ def source_files(root):
 
 
 def main():
+    for name in REQUIRED_SKILL_FILES:
+        if not (SKILL / name).is_file():
+            raise SystemExit('Unified skill resource is missing: ' + name)
     canonical = source_files(ROOT / 'hostcontrol')
     mirrored = source_files(SKILL / 'assets/source/hostcontrol')
     if canonical.keys() != mirrored.keys():

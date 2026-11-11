@@ -1,227 +1,275 @@
 <div align="center">
 
-<img src="docs/assets/hero.svg" alt="DevSpace Host Control — Ubuntu Claude Desktop to your Windows desktop" width="100%" />
+<img src="docs/assets/hero.svg" alt="DevSpace Host Control — Linux Claude Desktop × 真实 Windows 桌面" width="100%" />
 
-**在 Ubuntu 上使用 Claude Desktop，通过受限私网操作你的真实 Windows 电脑。**
+# DevSpace Host Control
 
-[![CI](https://github.com/wcy-wcy1/devspace-host-control/actions/workflows/ci.yml/badge.svg)](https://github.com/wcy-wcy1/devspace-host-control/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/wcy-wcy1/devspace-host-control?color=0d9488&label=release)](https://github.com/wcy-wcy1/devspace-host-control/releases)
-[![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](hostcontrol/go.mod)
-[![MCP](https://img.shields.io/badge/MCP-stdio-334155)](skills/devspace-host-control/SKILL.md)
-[![License](https://img.shields.io/badge/license-Apache--2.0-d97706)](LICENSE)
+### 让云端 Claude，连接你的真实 Windows 工作现场。
 
-[快速开始](#快速开始) · [工作原理](#工作原理) · [18-个工具](#18-个工具) · [验证状态](#验证状态) · [隐私边界](#隐私边界)
+**自动部署 · 断点续跑 · 双击启动 · 18 个 MCP 工具**
+
+[![CI](https://github.com/wcy-wcy1/devspace-host-control/actions/workflows/ci.yml/badge.svg)](https://github.com/wcy-wcy1/devspace-host-control/actions/workflows/ci.yml) [![Version](https://img.shields.io/badge/v0.2.0--beta.1-development-0f766e)](https://github.com/wcy-wcy1/devspace-host-control/releases/tag/v0.2.0-beta.1) [![MCP](https://img.shields.io/badge/MCP-18_tools-2563eb)](#mcp-tools) [![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](hostcontrol/go.mod) [![License](https://img.shields.io/badge/License-Apache_2.0-c28a36)](LICENSE)
+
+[**下载新版 Skill**](https://github.com/wcy-wcy1/devspace-host-control/releases/download/v0.2.0-beta.1/devspace-host-control.zip) · [快速开始](#quick-start) · [双击启动](#one-click) · [系统架构](#architecture) · [验证记录](#verification)
+
+<sub>Linux 上运行 Claude Desktop，Windows 上执行文件、命令与桌面操作。<br/>精确设备配对，双向证书认证，控制会话由本机限时开启。</sub>
 
 </div>
 
 ---
 
-## 这是什么
+## 一套工具，从安装到下一次打开
 
-DevSpace Host Control 包含一个 **HostControl 项目**和一个**自包含 Codex Skill**：你从本地 Windows 远程登录 Ubuntu，在 Ubuntu 图形桌面里使用 Claude Desktop；Claude 通过 MCP 调用本机代理，读写指定工作区、运行程序、观察窗口并操作鼠标键盘。
+DevSpace Host Control 将 **Go 主机控制模块**和**自包含 Codex Skill**放进同一个项目。你通过远程桌面使用 Linux 上的 Claude Desktop；Claude 通过 MCP 调用 Windows 本地 HostControl 程序，处理文件、执行任务、观察与操作真实桌面。
 
-项目源自对 [DevSpace](https://github.com/loft-sh/devspace) 的源码研究，新增了独立主机控制模块。**本仓库发布新增模块及 Skill，不包含完整上游 Kubernetes 项目，也未接入原 `devspace` CLI。** 这不是 DevSpace 或 Anthropic 的官方产品。
+<table>
+<tr>
+<td width="50%" valign="top">
 
-> **当前版本：v0.1.0 · 开发验证阶段。** 已完成自动测试和跨平台编译；实际 Ubuntu 安装、Claude 工具发现及真实桌面联调仍需部署验收。真实桌面控制不等于环境沙箱，也不保证零指纹泄露。
+### 🧭 自动部署，接着上次继续
 
-## 设计重点
+探测两端环境，复用已有安装与配对。阶段进度需要实际证据；设备地址或前置条件改变后，相关验收重新进行。
 
-| 能力 | 实现 |
-| :--- | :--- |
-| **指定设备访问** | 精确 Tailscale IP 校验，握手前过滤来源，配合完整 tailnet 策略与主机防火墙 |
-| **双向身份认证** | TLS 1.3、CA 验证、双方证书指纹固定；私钥各自在所属设备生成 |
-| **本地会话控制** | 默认暂停，限时启用、暂停和持久撤销；远端没有启用会话的工具 |
-| **真实桌面能力** | Win32 截图、聚焦、Unicode 输入、键盘与滚轮；系统 UIA 元素检查 |
-| **可审查的 Skill** | 包含源码、运行程序、部署脚本、哈希清单与实际验证记录；脚本默认预览 |
-| **轻量运行依赖** | Go 标准库实现，无第三方 Go 依赖；成品运行不要求 Go、Docker 或 Kubernetes |
+</td>
+<td width="50%" valign="top">
 
-## 工作原理
+### 🚀 配好一次，之后双击
 
-[![系统架构：两条连接分别用于远程桌面和 Claude 工具调用](docs/assets/architecture.png)](docs/assets/architecture.svg)
+双击 `Start-Claude.cmd`，启动或复用 Windows 程序，打开远程桌面，在 Linux 登录或重连时拉起 Claude。
 
-<details>
-<summary>查看可编辑的 Mermaid 架构源码</summary>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
-```mermaid
-flowchart LR
-    subgraph LOCAL[本地 Windows]
-        RDP[远程桌面客户端]
-        AGENT[hostagent]
-        FILES[工作区文件]
-        EXEC[程序与任务]
-        GUI[真实桌面与浏览器]
-        PANEL[本地授权页]
-        PANEL -->|启用 / 暂停 / 撤销| AGENT
-        AGENT --> FILES
-        AGENT --> EXEC
-        AGENT --> GUI
-    end
-    subgraph CLOUD[Ubuntu 云服务器]
-        XRDP[XFCE + xrdp]
-        CLAUDE[Claude Desktop]
-        MCP[hostmcp]
-        XRDP --> CLAUDE
-        CLAUDE <-->|本地 stdio MCP| MCP
-    end
-    RDP <-->|指定私网地址 · TCP 3389| XRDP
-    MCP <-->|指定私网地址 · 双向 TLS · TCP 7443| AGENT
-```
+### 🔗 从文件到真实桌面
 
-</details>
+18 个 MCP 工具覆盖工作区文件、程序任务、截图、UIA 检查、鼠标键盘与浏览器打开。文本剪贴板默认双向开启。
 
-**两条独立连接：** Windows → Ubuntu 用于远程桌面；Ubuntu → Windows 用于工具调用。MCP 适配器在 Ubuntu 本地运行，由 Claude Desktop 启动，跨设备采用 HTTPS JSON RPC。
+</td>
+<td width="50%" valign="top">
 
-| 组件 | 所在设备 | 责任 |
-| :--- | :--- | :--- |
-| `hostagent` | Windows amd64 | 身份、会话、文件、任务和真实桌面后端 |
-| `hostmcp` | Linux amd64 / arm64 | Claude Desktop 的 stdio MCP 适配器 |
-| `hostctl` | 两端 | 本地密钥生成、CSR、证书审批与指纹核对 |
-| `devspace-host-control` Skill | Codex 环境 | 组织安装、配对、配置、验证和维护；Claude Desktop 接入的是 MCP |
+### 🔐 配对明确，授权可停
 
+精确 Tailscale 设备地址、mTLS 与证书指纹固定。Windows 程序默认暂停，支持本机限时开启、暂停和持久撤销。
+
+</td>
+</tr>
+</table>
+
+> [!IMPORTANT]
+> **v0.2.0-beta.1 是开发验证版本。** 已有一次 CentOS 原机部署经验；新版离线测试与运行程序完整性检查通过。完整新装、一键入口的真实冷启动/重连、实际键鼠操作仍需现场验收。[查看验证范围 →](#verification)
+
+<a id="quick-start"></a>
 ## 快速开始
 
-### 1 · 下载成品
+### 01 · 取走完整工具包
 
-前往 **[Releases](https://github.com/wcy-wcy1/devspace-host-control/releases/latest)**，下载：
+| 下载 | 内容 |
+| :--- | :--- |
+| [**devspace-host-control.zip**](https://github.com/wcy-wcy1/devspace-host-control/releases/download/v0.2.0-beta.1/devspace-host-control.zip) | 自包含 Skill：运行程序、源码、自动化、安装与启动脚本、排错指南 |
+| [devspace-hostcontrol-source.zip](https://github.com/wcy-wcy1/devspace-host-control/releases/download/v0.2.0-beta.1/devspace-hostcontrol-source.zip) | 独立 Go 模块源码，适合研究和二次开发 |
+| [SHA256SUMS.txt](https://github.com/wcy-wcy1/devspace-host-control/releases/download/v0.2.0-beta.1/SHA256SUMS.txt) | 两个压缩包的 SHA256 校验值 |
 
-- `devspace-host-control.zip`：完整 Skill，含六个运行程序和源码。
-- `devspace-hostcontrol-source.zip`：独立 Go 模块源码。
-- `SHA256SUMS.txt`：上述压缩包的 SHA256。
-
-也可以克隆本仓库；`skills/devspace-host-control/` 已包含自包含 Skill：
+也可以直接使用仓库中的完整 Skill：
 
 ```bash
 git clone https://github.com/wcy-wcy1/devspace-host-control.git
 cd devspace-host-control
-python skills/devspace-host-control/scripts/verify_bundle.py
+python scripts/verify_repository.py
 ```
 
-### 2 · 安装 Skill
+### 02 · 安装 Skill，告诉 Codex 你的目标
 
-将 `devspace-host-control.zip` 中的同名文件夹放入 Codex 的 skills 目录。默认路径为 `~/.codex/skills/`；设置了 `CODEX_HOME` 时使用该目录下的 `skills/`。已有同名 Skill 时先备份再更新。
-
-Windows PowerShell 示例：
+将压缩包里的 `devspace-host-control/` 放入 Codex 的 skills 目录。默认是 `~/.codex/skills/`；设置了 `CODEX_HOME` 时，使用该目录下的 `skills/`。更新已有版本前先备份。
 
 ```powershell
 $skillBase = if ($env:CODEX_HOME) { Join-Path $env:CODEX_HOME 'skills' } else { Join-Path $env:USERPROFILE '.codex/skills' }
 Expand-Archive -LiteralPath ./devspace-host-control.zip -DestinationPath $skillBase
 ```
 
-在能够发现该 Skill 的 Codex 会话中调用：
+在能够发现该 Skill 的 Codex 会话中说：
 
 ```text
-$devspace-host-control 帮我部署 Ubuntu Claude Desktop 控制本机 Windows
+使用 $devspace-host-control，自动部署 Linux Claude Desktop 控制我的 Windows。
+先检查现有环境，复用已有配置；缺少必要信息或需要我登录时再问我。
 ```
 
-**创建 Skill 或研究代码时无需提供服务器参数。** 部署时再收集两端系统、Tailscale 地址、现有 SSH 连接方式和 Windows 工作区目录。不要在聊天中发送密码、私钥或登录令牌。
+**Codex 执行安装、策略配置、配对与验证。** Tailscale/Claude 登录、UAC 和本机限时授权由用户交互完成。已有服务器、系统选择和工作区信息会复用；不要在聊天中发送密码、API 密钥或私钥。
 
-### 3 · 按设备完成部署
+### 03 · 按你的环境选路径
 
-| 设备 | 所需组件 |
-| :--- | :--- |
-| Ubuntu | 图形桌面、xrdp/xorgxrdp、Claude Desktop、Tailscale、`hostmcp` / `hostctl` |
-| Windows | RDP 客户端、Tailscale、`hostagent.exe` / `hostctl.exe`、交互式登录会话 |
+| 位置 | 支持范围 | 说明 |
+| :--- | :--- | :--- |
+| **Linux 控制端** | Ubuntu 22.04 / 24.04；运行程序 amd64 / arm64 | XFCE、xrdp、Claude Desktop、Tailscale、`hostmcp` |
+| **CentOS 适配** | CentOS Stream 9 x86_64 | 需要明确选择原机适配；核对官方签名与包哈希后使用 Debian 包 |
+| **Windows 执行端** | Windows amd64，交互式登录会话 | Tailscale、RDP 客户端、`hostagent.exe`、`hostctl.exe` |
 
-自动安装脚本目标为 Ubuntu **22.04 / 24.04**。预编译 Linux 程序支持 **amd64 / arm64**；Windows 原生桌面后端支持 **amd64**。部署脚本另需 Python 3、Bash / PowerShell；运行 Go 成品不需要开发 SDK。
+Claude Desktop 官方不支持 CentOS，本项目提供兼容适配；Ubuntu 仍是主要安装路径。Go 成品运行不需要 Go SDK、Docker 或 Kubernetes，部署脚本另需 Python 3、Bash / PowerShell。
 
-完整流程见 **[部署与配对指南](skills/devspace-host-control/references/operations.md)**：检查完整网络策略 → 预览配置 → 安装桌面组件 → 两端各自生成私钥 → 交换公开 CSR / 证书 → 配置 Claude MCP → Windows 本地限时授权 → 验收。
+📖 [自动化与续跑](skills/devspace-host-control/references/automation.md) · [部署与证书配对](skills/devspace-host-control/references/operations.md) · [安装故障诊断](skills/devspace-host-control/references/troubleshooting.md)
+
+<a id="one-click"></a>
+## 下一次，只需双击入口
+
+配置完成后生成属于这台设备的启动目录。以后保留整个目录，双击 **`Start-Claude.cmd`**：
+
+```mermaid
+flowchart LR
+    A[双击 Start-Claude.cmd] --> B[启动或复用 Windows HostControl]
+    B --> C[打开远程桌面]
+    C --> D[Linux 登录或重连]
+    D --> E[拉起或复用 Claude Desktop]
+```
+
+- **复用已有配置**：同一代理已经运行时保留当前会话；进程或配置不匹配时明确报错。
+- **登录方式不变**：正常 RDP 账号登录；启动脚本不嵌入 SSH/RDP 密码，也不复制配对私钥。
+- **授权由本机掌握**：新代理启动后暂停；需要操作电脑时，再在本机控制页开启限时会话。
+- **复制文字更顺手**：默认双向文本剪贴板，文件/图片、磁盘和设备共享继续关闭；可显式关闭文本共享。
+
+Linux 通过所选用户的 XFCE autostart 和 xrdp 重连钩子启动 Claude，不创建 Windows 开机任务。生成步骤、验证和移除方法见 [双击启动指南](skills/devspace-host-control/references/launcher.md)。
+
+<a id="architecture"></a>
+## 两条连接，分清谁在操作谁
+
+[![系统架构：Windows 经 RDP 使用 Linux Claude，Claude 经 MCP 和 mTLS 调用 Windows 工具](docs/assets/architecture.png)](docs/assets/architecture.svg)
+
+| 通道 | 方向 | 用途 |
+| :--- | :--- | :--- |
+| **远程桌面** | Windows → Linux · TCP 3389 | 你打开并使用 Claude Desktop |
+| **工具调用** | Linux → Windows · TCP 7443 | Claude 经本地 stdio MCP 适配器和双向 TLS 调用 HostControl |
+
+这里的 Windows“代理”是**执行本机操作的 HostControl 程序**。`hostmcp` 由 Linux Claude Desktop 启动；Codex Skill 负责安装和维护工作流，Claude 实际接入的是 MCP。
 
 <details>
-<summary><b>只预览安装与防火墙，不应用更改</b></summary>
+<summary><b>组件职责与可编辑架构</b></summary>
 
-以下使用示例私网地址，部署时必须替换为真实设备地址。
+| 组件 | 所在位置 | 责任 |
+| :--- | :--- | :--- |
+| `hostagent` | Windows | 身份、会话、文件、任务与 Win32/UIA 桌面后端 |
+| `hostmcp` | Linux | 将 stdio MCP 工具调用转换为配对私网请求 |
+| `hostctl` | 两端 | 本地密钥、CSR、证书审批和指纹核对 |
+| Skill / Python / PowerShell | Codex 与部署设备 | 环境发现、策略事务、安装、配对、启动和验收 |
 
-```bash
-bash skills/devspace-host-control/scripts/ubuntu-desktop.sh \
-  --plan --windows-ip 100.80.0.1 --ubuntu-ip 100.80.0.2 --desktop-user worker
+```mermaid
+flowchart LR
+    subgraph PC[本地 Windows]
+        RDP[远程桌面客户端]
+        PANEL[本机限时授权页] --> AGENT[hostagent]
+        AGENT --> FILES[工作区文件]
+        AGENT --> EXEC[程序与任务]
+        AGENT --> GUI[真实桌面]
+    end
+    subgraph SERVER[Linux 控制端]
+        XRDP[XFCE + xrdp] --> CLAUDE[Claude Desktop]
+        CLAUDE <-->|stdio MCP| MCP[hostmcp]
+    end
+    RDP <-->|Tailscale / 3389| XRDP
+    MCP <-->|Tailscale + mTLS / 7443| AGENT
 ```
-
-```powershell
-./skills/devspace-host-control/scripts/windows-firewall.ps1 `
-  -WindowsIP 100.80.0.1 -UbuntuIP 100.80.0.2 -AgentExe 'C:/HostControl/hostagent.exe'
-```
-
-需要显式 `--apply` / `-Apply` 才修改系统。Ubuntu 脚本要求现有非 root 桌面用户、已登录的 Tailscale 及审查后的完整策略文件，拒绝直接改造正在运行的 xrdp。
 
 </details>
 
-## 18 个工具
+<a id="mcp-tools"></a>
+## 18 个工具，连接实际工作
 
-| 范围 | MCP 工具 | 行为与限制 |
+| 能力 | MCP 工具 | 行为与边界 |
 | :--- | :--- | :--- |
-| 状态 | `host_status` · `session_info` | 授权状态、能力与期限；需要有效本地会话 |
-| 文件 | `fs_list` · `fs_read` · `fs_write` · `fs_move` | 显式工作区内操作；UTF-8 ≤ 1 MiB；覆盖需旧哈希并生成备份 |
-| 执行 | `exec_start` · `exec_poll` · `exec_cancel` | 参数化程序执行、超时、有限输出和进程树取消 |
-| 观察 | `desktop_windows` · `desktop_inspect` · `desktop_capture` | 窗口、最多 500 个 UIA 元素、窗口可见区域截图 |
-| 输入 | `desktop_focus` · `desktop_click` · `desktop_type` · `desktop_key` · `desktop_scroll` | 聚焦、点击、Unicode、组合键与滚轮 |
-| 浏览器 | `browser_open` | 默认浏览器打开 HTTP/HTTPS URL，后续使用桌面工具 |
+| **会话状态** | `host_status` · `session_info` | 本地授权状态、能力与期限；需要有效会话 |
+| **工作区文件** | `fs_list` · `fs_read` · `fs_write` · `fs_move` | UTF-8 文本 ≤ 1 MiB；覆盖需旧哈希并生成备份 |
+| **程序与任务** | `exec_start` · `exec_poll` · `exec_cancel` | 参数化执行、超时、有限输出和进程树取消 |
+| **桌面观察** | `desktop_windows` · `desktop_inspect` · `desktop_capture` | 窗口、最多 500 个 UIA 元素、窗口可见区域截图 |
+| **键鼠输入** | `desktop_focus` · `desktop_click` · `desktop_type` · `desktop_key` · `desktop_scroll` | 聚焦、点击、Unicode、组合键与滚轮 |
+| **浏览器入口** | `browser_open` | 默认浏览器打开 HTTP/HTTPS 页面，后续使用桌面工具 |
 
-截图帧绑定窗口与位置，有效期 **30 秒**；每次实际输入消费一帧，下一次输入需要重新观察。窗口移动、失焦或帧过期会拒绝输入。截图可能包含遮挡窗口，UIA 并非所有应用都支持。
+截图帧绑定窗口与位置，有效期 **30 秒**；每次实际输入消费一帧。失焦、窗口移动或帧过期会拒绝输入，需重新观察。UIA 并非所有应用都支持，截图也可能包含遮挡窗口。
 
-**当前未实现：** DOM / Playwright 工具、UIA 元素动作派发、交互式 ConPTY、匿名中继和证书自动续期。
+<details>
+<summary><b>配置完成后，怎样让 Claude 做第一次连接测试？</b></summary>
 
-## 验证状态
+在 Linux Claude Desktop 中，使用一个可删除的工作区测试文件：
 
-初始打包验证记录见 **[build-evidence.md](skills/devspace-host-control/assets/build-evidence.md)**。CI 状态反映当前提交的自动检查。
+```text
+使用 my-windows-pc，先调用 host_status。
+在 work 工作区新建 claude-test.txt，内容为“Claude connection test”。
+读回文件并报告真实工具结果；失败时报告错误，不模拟成功。
+```
 
-| 检查 | 初始交付结果 |
+电脑端先开启本机限时会话。文件 API 支持文本读取；PDF、Word、图片解析和完整二进制下载需要另行处理。桌面输入验收使用可丢弃的测试窗口，并遵守焦点和新鲜帧检查。
+
+</details>
+
+## 可靠性，从实际安装问题里改进
+
+| 遇到的问题 | 统一版本的处理 |
 | :--- | :--- |
-| Windows Go 测试 | **13 通过 · 1 跳过 · 0 失败**；跳过真实桌面截图 |
-| 配置脚本测试 | **4 通过**，包含拒绝附加全放行策略 |
-| 身份与会话 | 回环 mTLS、错误身份/来源拒绝、暂停/过期、重启后撤销 |
-| 文件与任务 | 遍历与 junction 越界、写入冲突、Job Object 子进程取消、输出上限 |
-| MCP 可执行程序 | 初始化、通知及 18 个工具 schema 输出通过 |
-| 构建与完整性 | 六个程序交叉编译；SHA256、文件大小与 PE / ELF 架构校验通过 |
-| 现场部署 | **待验收**：Ubuntu 安装、Claude 实际工具发现、真实 UIA / 键鼠、多屏与 DPI、两端有效防火墙规则 |
+| 修改剪贴板后登录成功，桌面却无法启动 | 按行修改 INI，保留 Xorg/Xvnc 重复 `param=` 顺序；有歧义或参数损坏时拒绝写入 |
+| CentOS 登录后密钥环不解锁、Claude 用户目录异常 | 补齐 PAM 依赖，调整 `substack` 顺序，正确创建用户目录中间层 |
+| 策略“保存了”，实际仍然全部互通 | 读取完整文档，条件保存并读回；不把聊天回复当作有效策略证据 |
+| 自动化中断后重复安装、丢失现场状态 | 记录观察证据，复用现有安装，前置条件变化时使依赖阶段失效 |
+| PowerShell 7 影响 Windows PowerShell UIA 子进程 | 在可见启动器中隔离模块路径，退出后恢复环境 |
 
-CI 在 Windows 与 Ubuntu 上运行 Go 测试、`go vet`、Python 测试及 Skill 完整性检查；不会控制真实桌面或部署服务。Linux 程序能交叉编译不等于 Linux GUI 已通过验收。
+配置工具默认预览；应用时备份、检查并发修改、原子替换单个文件，部分失败时尝试回滚自己的写入。不会为修复剪贴板自动注销或重启正在使用的桌面。[部署改进记录 →](docs/deployment-reliability.md)
 
-## 隐私边界
+<a id="verification"></a>
+## 验证透明，才能放心迭代
 
-**IP 白名单约束连接来源，证书约束设备身份；它们不能隔离已授权的真实桌面。**
+**2026-11-11 · 统一版本的实际检查记录**
 
-- 文件 API 使用工作区根限制；任意程序和 GUI 具有当前 Windows 用户权限，**不是沙箱**。
-- 截图、UIA 文本、窗口标题和命令输出可能包含本机身份，并会作为工具结果返回给 Claude。
-- Tailscale 加密不保证对端不知道公网端点元数据；此项目没有匿名网关或“零指纹”承诺。
-- 完整 tailnet 策略中的放行是叠加的；添加精确规则不能抵消已有广泛放行。
-- 私钥不跨设备传输；Windows 使用当前用户 DPAPI 和目录 ACL，不能防御同用户已失陷进程。
-- 默认暂停与本地控制页提供操作入口；拥有完整 GUI 权限的控制方也可能操作该页面，因此它不是独立硬件授权边界。
-- 不安装隐藏服务、开机任务或提权绕过；锁屏和 UAC 失败按实际限制返回。
+| 验证层次 | 结果 |
+| :--- | :--- |
+| **Windows 离线测试** | **58 通过，0 跳过**；新启动模拟同时覆盖 PowerShell 7 与 Windows PowerShell 5.1 |
+| **CentOS 隔离测试** | **52 通过，6 跳过**；跳过 Windows / PowerShell 专属场景 |
+| **脚本与成品完整性** | Bash/PowerShell 语法与安装预览通过；6 个运行程序哈希/架构通过；32 个 Go 源码镜像一致 |
+| **已有现场记录** | RDP 登录、Claude 账号登录与 MCP 连接日志、Windows 文件操作、命令执行、窗口截图 |
+| **启动器现场配置** | 登录/重连钩子应用及重复应用通过；识别现有代理，Claude helper 返回 `already_running` |
+| **仍待现场验收** | 新脚本完整新装、真实双击冷启动/重连、实际键鼠输入、文件/图片剪贴板拒绝、多屏与 DPI |
 
-更多说明见 **[隐私与权限边界](skills/devspace-host-control/references/privacy.md)**。证书叶子有效期三个月、CA 一年；撤销持久保存，续期需显式配对操作。操作去重仅保存在当前进程中，未知结果不能盲目重试。
+离线测试使用假代理与夹具，不能证明真实桌面全部可用。当前未实现 DOM/Playwright 工具、UIA 元素动作派发、交互式 ConPTY、匿名中继和证书自动续期。
 
-## 开发与打包
+[统一版本记录](docs/unified-release.md) · [原始构建证据](skills/devspace-host-control/assets/build-evidence.md) · [验收场景](skills/devspace-host-control/references/verification.md) · [CI 运行结果](https://github.com/wcy-wcy1/devspace-host-control/actions)
+
+## 权限与数据边界
+
+> **精确配对限制连接；本地授权决定是否执行。真实桌面与程序执行仍具有当前用户权限。**
+
+- **网络与身份**：精确设备地址、完整 Tailscale 策略、主机防火墙、TLS 1.3 和双方指纹固定共同限制连接。新增精确放行不会抵消已有广泛规则。
+- **文件与桌面**：文件 API 有工作区根限制；任意程序与 GUI 不受该根目录沙箱约束。截图、UIA 文本、窗口标题和命令输出可能含本机信息。
+- **密钥与会话**：私钥在所属设备生成，不跨设备复制；Windows 使用当前用户 DPAPI 与目录 ACL。会话可暂停与持久撤销，程序退出可停止控制。
+- **可见启动**：不安装隐藏服务、Windows 开机任务或提权绕过。锁屏/UAC 限制按实际失败返回；Claude 的登录/重连自启只配置给所选 Linux 用户。
+- **实际限制**：Tailscale 可能暴露公网端点元数据；完整 GUI 控制也可能看到或操作本地授权页。本项目不提供匿名网关或“零指纹”保证。
+
+证书叶子有效期三个月、CA 一年，续期需要显式配对。操作去重仅保存在当前进程中，未知结果不能盲目重试。[完整边界说明 →](skills/devspace-host-control/references/privacy.md)
+
+## 开发与二次构建
 
 ```text
 devspace-host-control/
-├── hostcontrol/                         # 维护的 Go 模块
-│   ├── cmd/{hostagent,hostmcp,hostctl}/
-│   ├── internal/host/                   # 认证、文件、任务、Win32、UIA
-│   └── build.ps1
-├── skills/devspace-host-control/        # 可直接安装的完整 Skill
-│   ├── SKILL.md
-│   ├── scripts/                         # 配置、安装、检查
-│   ├── references/                      # 运维、隐私、验收
-│   └── assets/                          # 运行程序、源码镜像、校验与证据
-├── scripts/                            # 仓库一致性校验和发布打包
-└── .github/workflows/ci.yml
+├── hostcontrol/                      # 维护的 Go 源码：agent / MCP / CLI
+├── skills/devspace-host-control/
+│   ├── SKILL.md                     # 自动部署与维护入口
+│   ├── scripts/                     # 发现、策略、安装、启动、诊断与测试
+│   ├── references/                  # 操作、续跑、启动、隐私与验收指南
+│   └── assets/                      # 六个成品、源码镜像与校验记录
+├── docs/                            # 架构图与真实改进记录
+└── scripts/                         # 一致性验证与发布打包
 ```
 
-在 `hostcontrol/` 内运行：
-
 ```bash
+# 仓库根目录：离线检查与包完整性
+python -m unittest discover -s skills/devspace-host-control/scripts -p 'test_*.py' -v
+python scripts/verify_repository.py
+
+# Go 模块目录：实现测试与静态检查
+cd hostcontrol
 go test ./... -count=1
 go vet ./...
 ```
 
-在仓库根目录运行：
+<details>
+<summary><b>构建运行程序和发布包</b></summary>
 
-```bash
-python skills/devspace-host-control/scripts/test_configure.py -v
-python scripts/verify_repository.py
-```
-
-Windows PowerShell 构建及打包：
+在仓库根目录使用 Windows PowerShell：
 
 ```powershell
 $runtimeDir = Join-Path (Get-Location) 'skills/devspace-host-control/assets/runtime'
@@ -229,16 +277,24 @@ $runtimeDir = Join-Path (Get-Location) 'skills/devspace-host-control/assets/runt
 python scripts/package.py
 ```
 
-`hostcontrol/` 是维护源码；打包脚本同步到 Skill 的源码镜像、刷新程序校验值并生成 `dist/` 压缩包。修改实现后需重新构建、测试，并更新真实验证记录；打包本身不会替你证明程序正确。
+`hostcontrol/` 是维护源码，Skill 中的 `assets/source/hostcontrol/` 是分发镜像。打包同步镜像并生成 `dist/`；修改 Go 实现后须重新构建、测试及更新证据，打包本身不代替验证。运行程序没有第三方 Go 依赖。
 
-## 上游与许可
+</details>
 
-上游研究基线：[DevSpace `8ff6260`](https://github.com/loft-sh/devspace/tree/8ff6260787edacfa2c0d30d1ff62358d36d482bc)。新增模块借鉴其命令执行、同步和通道组织思路，重新实现主机身份、MCP 及 Windows 后端；不将 Kubernetes 内部通道原样暴露为主机服务。
+## 项目出处与许可
 
-本项目采用 **[Apache-2.0](LICENSE)**。出处说明见 [NOTICE](NOTICE)，保留的上游许可见 [LICENSE.devspace](skills/devspace-host-control/assets/LICENSE.devspace)。
+项目源自对 [DevSpace](https://github.com/loft-sh/devspace) 的源码研究，新增独立的主机控制模块。此仓库发布新增模块及 Skill，不包含完整上游 Kubernetes 项目，也未接入原 `devspace` CLI；不是 DevSpace 或 Anthropic 的官方产品。
+
+研究基线：[DevSpace `8ff6260`](https://github.com/loft-sh/devspace/tree/8ff6260787edacfa2c0d30d1ff62358d36d482bc)。新增模块借鉴命令执行、同步和通道组织思路，重新实现主机身份、MCP 与 Windows 后端。
+
+采用 **[Apache-2.0](LICENSE)**。出处见 [NOTICE](NOTICE)，保留的上游许可见 [LICENSE.devspace](skills/devspace-host-control/assets/LICENSE.devspace)。
 
 ---
 
 <div align="center">
-<sub>明确授权 · 精确配对 · 真实边界</sub>
+
+**从一次配置，到下一次双击。**
+
+[下载 Skill](https://github.com/wcy-wcy1/devspace-host-control/releases/tag/v0.2.0-beta.1) · [阅读自动化指南](skills/devspace-host-control/references/automation.md) · [反馈问题](https://github.com/wcy-wcy1/devspace-host-control/issues)
+
 </div>

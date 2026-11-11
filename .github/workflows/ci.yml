@@ -33,10 +33,23 @@ jobs:
       - name: Go vet
         working-directory: hostcontrol
         run: go vet ./...
-      - name: Configuration tests
-        run: python skills/devspace-host-control/scripts/test_configure.py -v
+      - name: Configuration and desktop regression tests
+        run: python -m unittest discover -s skills/devspace-host-control/scripts -p 'test_*.py' -v
       - name: Skill integrity and source consistency
         run: python scripts/verify_repository.py
-      - name: Ubuntu installer syntax
+      - name: Desktop installer syntax
         if: runner.os == 'Linux'
-        run: bash -n skills/devspace-host-control/scripts/ubuntu-desktop.sh
+        run: |
+          bash -n skills/devspace-host-control/scripts/ubuntu-desktop.sh
+          bash -n skills/devspace-host-control/scripts/centos-desktop.sh
+      - name: Windows launcher syntax
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem 'skills/devspace-host-control/scripts/*.ps1' | ForEach-Object {
+            $tokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors) { throw ($parseErrors | Out-String) }
+          }

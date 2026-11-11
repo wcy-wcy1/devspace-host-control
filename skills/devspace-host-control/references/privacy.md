@@ -4,7 +4,7 @@ The approved target is the user's **real Windows desktop**, not a local VM. The 
 
 The network permits exact Tailscale device addresses and required ports. It also needs device identity, certificate pinning and local authorization. IP alone is not authentication. Other tailnet members are untrusted. Observe IPv6 as well as IPv4; bootstrap scripts intentionally use exact IPv4, and the agent binds one explicit address.
 
-Independent Ubuntu user/browser state and disabled RDP redirection prevent automatic sharing of local profiles. This is not a sandbox around the real Windows account. General commands and GUI interactions can reach information and services accessible to that account, including through alternate programs. The file API's workspace root restrictions do not restrict a shell.
+Independent Linux user/browser state and disabled drive/device redirection avoid mounting local profiles automatically. Text clipboard redirection is enabled by default, so copied text may cross the RDP session; use `--clipboard disabled` to turn it off. This is not a sandbox around the real Windows account. General commands and GUI interactions can reach information and services accessible to that account, including through alternate programs. The file API's workspace root restrictions do not restrict a shell.
 
 Do not claim zero fingerprint leakage. Routine Claude traffic originates on Ubuntu, but tool results can reveal local identifiers. Screenshots can include private windows/overlays. `desktop_windows` deliberately returns window titles. The host exposes only a pseudonymous status, but arbitrary commands can explicitly query system identities. Errors are minimized, not universally anonymized. There is no universal image/text secret detector.
 

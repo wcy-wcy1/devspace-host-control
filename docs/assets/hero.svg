@@ -1,46 +1,51 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="440" viewBox="0 0 1280 440" role="img" aria-labelledby="title desc">
-  <title id="title">DevSpace Host Control</title>
-  <desc id="desc">An illustrated bridge between Claude Desktop on Ubuntu and a paired Windows desktop.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="500" viewBox="0 0 1280 500" role="img" aria-labelledby="title desc">
+  <title id="title">DevSpace Host Control — Cloud intelligence. Your real desktop.</title>
+  <desc id="desc">Linux Claude Desktop connects through paired MCP tools to a real Windows desktop. Automated setup, resumable deployment and a double-click launcher.</desc>
   <defs>
-    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0b1424"/><stop offset="1" stop-color="#122a38"/></linearGradient>
-    <linearGradient id="accent"><stop stop-color="#64e4cf"/><stop offset="1" stop-color="#86b9ff"/></linearGradient>
-    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#8bb6c8" stroke-opacity=".06"/></pattern>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0b1424"/><stop offset="1" stop-color="#12333f"/></linearGradient>
+    <linearGradient id="accent"><stop stop-color="#76eed5"/><stop offset="1" stop-color="#9ac7ff"/></linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#a2ccdb" stroke-opacity=".055"/></pattern>
   </defs>
-  <rect width="1280" height="440" rx="24" fill="url(#bg)"/>
-  <rect width="1280" height="440" rx="24" fill="url(#grid)"/>
-  <path d="M910 0 L1280 0 L1280 440 L1110 440 Z" fill="#61dcc8" fill-opacity=".025"/>
-  <circle cx="1170" cy="50" r="140" fill="none" stroke="#6ac7c7" stroke-opacity=".08"/>
-  <circle cx="1170" cy="50" r="210" fill="none" stroke="#6ac7c7" stroke-opacity=".05"/>
+  <rect width="1280" height="500" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="500" rx="24" fill="url(#grid)"/>
+  <circle cx="1200" cy="40" r="200" fill="none" stroke="#76eed5" stroke-opacity=".08"/>
+  <circle cx="1200" cy="40" r="278" fill="none" stroke="#76eed5" stroke-opacity=".045"/>
+  <path d="M865 0h415v500h-220z" fill="#7beed6" fill-opacity=".025"/>
   <g font-family="Segoe UI,Arial,sans-serif">
-    <rect x="54" y="43" width="34" height="34" rx="9" fill="#63e3ce"/>
-    <path d="M62 54 H78 M62 61 H73 M62 68 H78" stroke="#102534" stroke-width="2.5" stroke-linecap="round"/>
-    <text x="101" y="65" fill="#a4b8c9" font-size="13" font-weight="600" letter-spacing="3">DEVSPACE / HOST CONTROL</text>
-    <text x="54" y="151" fill="#f2f7fc" font-size="57" font-weight="700" letter-spacing="-2">Your desktop.</text>
-    <text x="54" y="214" fill="url(#accent)" font-size="57" font-weight="700" letter-spacing="-2">One deliberate bridge.</text>
-    <text x="57" y="259" fill="#a2b6c8" font-size="18">Claude Desktop on Ubuntu. Tools on your Windows PC.</text>
-    <g transform="translate(57 306)">
-      <rect width="113" height="31" rx="15.5" fill="#1d3a46" stroke="#2c5b61"/>
-      <text x="56" y="21" fill="#86e2d1" font-size="12" text-anchor="middle">18 MCP tools</text>
-      <rect x="125" width="118" height="31" rx="15.5" fill="#182e43" stroke="#2a4963"/>
-      <text x="184" y="21" fill="#a6caff" font-size="12" text-anchor="middle">Paired access</text>
-      <rect x="255" width="115" height="31" rx="15.5" fill="#2d3035" stroke="#51453b"/>
-      <text x="312" y="21" fill="#efc28c" font-size="12" text-anchor="middle">Local sessions</text>
+    <rect x="54" y="44" width="34" height="34" rx="9" fill="#76eed5"/>
+    <path d="M63 55h16M63 62h11M63 69h16" stroke="#102534" stroke-width="2.5" stroke-linecap="round"/>
+    <text x="103" y="66" fill="#bacbd7" font-size="13" font-weight="600" letter-spacing="2.8">DEVSPACE / HOST CONTROL</text>
+    <text x="54" y="164" fill="#f5f8fc" font-size="56" font-weight="700" letter-spacing="-1.8">Cloud intelligence.</text>
+    <text x="54" y="232" fill="url(#accent)" font-size="56" font-weight="700" letter-spacing="-1.8">Your real desktop.</text>
+    <text x="57" y="280" fill="#afc2d2" font-size="18">Claude on Linux. MCP tools on your Windows PC.</text>
+    <g transform="translate(56 321)" font-size="12" font-weight="600" text-anchor="middle">
+      <rect width="115" height="32" rx="16" fill="#193d44" stroke="#346967"/><text x="57" y="21" fill="#93edd9">18 MCP tools</text>
+      <rect x="127" width="143" height="32" rx="16" fill="#1a334b" stroke="#355777"/><text x="198" y="21" fill="#b2d3ff">Resumable setup</text>
+      <rect x="282" width="148" height="32" rx="16" fill="#33352f" stroke="#5a5947"/><text x="356" y="21" fill="#eddaaa">Double-click launch</text>
     </g>
-    <text x="57" y="394" fill="#6e8a9c" font-size="12" letter-spacing="1">MCP STDIO  /  MUTUAL TLS  /  WIN32 + UIA</text>
-    <g transform="translate(832 105)">
-      <rect width="357" height="95" rx="14" fill="#132b3b" stroke="#2c4a5a"/>
-      <rect x="20" y="22" width="50" height="50" rx="12" fill="#af714f" fill-opacity=".16"/>
-      <path d="M34 47 L43 38 L53 47 L43 56 Z M54 36 L60 42" fill="none" stroke="#e9b68e" stroke-width="2.5" stroke-linecap="round"/>
-      <text x="88" y="42" fill="#f1f5f9" font-size="18" font-weight="600">Ubuntu</text>
-      <text x="88" y="65" fill="#92aabd" font-size="13">Claude Desktop + hostmcp</text>
-      <path d="M178 95 V159" stroke="#66d7c8" stroke-width="2" stroke-dasharray="4 5"/>
-      <rect x="120" y="113" width="116" height="25" rx="12.5" fill="#0d1f2b" stroke="#2e5c62"/>
-      <text x="178" y="130" text-anchor="middle" fill="#86dacd" font-size="11">Tailscale + mTLS</text>
-      <rect y="159" width="357" height="95" rx="14" fill="#132b3b" stroke="#2c4a5a"/>
-      <rect x="20" y="181" width="50" height="50" rx="12" fill="#71b4ff" fill-opacity=".1"/>
-      <path d="M32 194 H58 V212 H32 Z M39 219 H51 M45 212 V219" fill="none" stroke="#97c6ff" stroke-width="2" stroke-linejoin="round"/>
-      <text x="88" y="201" fill="#f1f5f9" font-size="18" font-weight="600">Windows</text>
-      <text x="88" y="224" fill="#92aabd" font-size="13">Real desktop + hostagent</text>
+    <path d="M57 396h650" stroke="#365160" stroke-opacity=".7"/>
+    <text x="57" y="432" fill="#91acbd" font-size="12" letter-spacing="1.6">EXACT DEVICE PAIRING  /  MUTUAL TLS  /  LOCAL SESSIONS</text>
+    <text x="57" y="463" fill="#728f9f" font-size="11">Development preview · Ubuntu + CentOS adaptation · Windows amd64</text>
+    <g transform="translate(819 70)">
+      <rect width="405" height="360" rx="18" fill="#102635" stroke="#345563"/>
+      <path d="M0 47h405" stroke="#345563"/>
+      <circle cx="23" cy="24" r="4" fill="#efb38d"/><circle cx="38" cy="24" r="4" fill="#ead39c"/><circle cx="53" cy="24" r="4" fill="#85d7bc"/>
+      <text x="384" y="29" fill="#a6becc" font-size="11" text-anchor="end" letter-spacing="1.4">THE PAIRED BRIDGE</text>
+      <rect x="22" y="71" width="361" height="79" rx="11" fill="#173342" stroke="#345563"/>
+      <rect x="38" y="87" width="43" height="44" rx="10" fill="#cf9470" fill-opacity=".14"/>
+      <path d="M49 109l10-10 10 10-10 10z" stroke="#e8bd9e" stroke-width="2" fill="none"/>
+      <text x="98" y="102" fill="#eff6fb" font-size="18" font-weight="600">Linux controller</text>
+      <text x="98" y="126" fill="#a9bfce" font-size="12">Claude Desktop + hostmcp</text>
+      <path d="M203 151v58" stroke="#72decb" stroke-width="2" stroke-dasharray="4 5"/>
+      <rect x="122" y="168" width="162" height="26" rx="13" fill="#102635" stroke="#3f6c73"/>
+      <text x="203" y="185" text-anchor="middle" fill="#9be7d8" font-size="11">MCP / Tailscale / mTLS</text>
+      <rect x="22" y="210" width="361" height="79" rx="11" fill="#173342" stroke="#345563"/>
+      <rect x="38" y="227" width="43" height="44" rx="10" fill="#86b9ff" fill-opacity=".12"/>
+      <path d="M47 237h25v17H47zM59 254v7m-6 0h12" stroke="#acd1ff" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <text x="98" y="242" fill="#eff6fb" font-size="18" font-weight="600">Windows execution</text>
+      <text x="98" y="266" fill="#a9bfce" font-size="12">Files / commands / real desktop</text>
+      <circle cx="32" cy="326" r="4" fill="#e8c887"/>
+      <text x="47" y="330" fill="#c8d7df" font-size="12">Starts paused. Enable locally when needed.</text>
     </g>
   </g>
 </svg>

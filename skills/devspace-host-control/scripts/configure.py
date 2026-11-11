@@ -65,7 +65,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mode', choices=['agent', 'client', 'policy', 'check-policy', 'claude'])
     parser.add_argument('--windows-ip', required=True, type=vpn)
-    parser.add_argument('--ubuntu-ip', required=True, type=vpn)
+    parser.add_argument('--ubuntu-ip', '--server-ip', dest='ubuntu_ip', required=True, type=vpn)
     parser.add_argument('--port', type=int, default=7443)
     parser.add_argument('--credential-dir')
     parser.add_argument('--fingerprint', type=fingerprint)
