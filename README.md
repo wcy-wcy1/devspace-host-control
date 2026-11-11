@@ -114,20 +114,18 @@ Claude Desktop 官方不支持 CentOS，本项目提供兼容适配；Ubuntu 仍
 <a id="one-click"></a>
 ## 下一次，只需双击入口
 
-配置完成后生成属于这台设备的启动目录。以后保留整个目录，双击 **`Start-Claude.cmd`**：
+配置完成后，保留为这台设备生成的**整个启动目录**。下次双击 **`Start-Claude.cmd`**，即可接着使用：
 
-```mermaid
-flowchart LR
-    A[双击 Start-Claude.cmd] --> B[启动或复用 Windows HostControl]
-    B --> C[打开远程桌面]
-    C --> D[Linux 登录或重连]
-    D --> E[拉起或复用 Claude Desktop]
-```
+<p align="center">
+  <img src="docs/assets/one-click-launch.svg" alt="启动流程：双击 Start-Claude.cmd → 启动或复用 Windows HostControl → 打开远程桌面 → Linux 登录或重连 → 启动或复用 Claude Desktop。操作 Windows 前，仍需在本机开启限时会话。" width="100%" />
+</p>
 
-- **复用已有配置**：同一代理已经运行时保留当前会话；进程或配置不匹配时明确报错。
-- **登录方式不变**：正常 RDP 账号登录；启动脚本不嵌入 SSH/RDP 密码，也不复制配对私钥。
-- **授权由本机掌握**：新代理启动后暂停；需要操作电脑时，再在本机控制页开启限时会话。
-- **复制文字更顺手**：默认双向文本剪贴板，文件/图片、磁盘和设备共享继续关闭；可显式关闭文本共享。
+| 使用体验 | 具体行为 |
+| :--- | :--- |
+| **接着上次继续** | 复用已运行的同一代理，保留当前会话；进程或配置不匹配时明确报错。 |
+| **正常登录即可** | 使用原有 RDP 账号；启动脚本不保存 SSH/RDP 密码，不复制配对私钥。 |
+| **控制权留在本机** | 新代理默认暂停；需要操作 Windows 时，在本机控制页开启限时会话。 |
+| **文字随手复制** | 默认双向文本剪贴板，可显式关闭；文件、图片、磁盘和设备共享保持关闭。 |
 
 Linux 通过所选用户的 XFCE autostart 和 xrdp 重连钩子启动 Claude，不创建 Windows 开机任务。生成步骤、验证和移除方法见 [双击启动指南](skills/devspace-host-control/references/launcher.md)。
 
