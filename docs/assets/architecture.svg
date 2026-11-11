@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="904" viewBox="0 0 1120 904" role="img" aria-labelledby="title desc">
+  <title id="title">Ubuntu Claude Desktop 与本地 Windows 的连接架构</title>
+  <desc id="desc">蓝色连接由 Windows 远程桌面客户端指向 Ubuntu XFCE 和 xrdp。青绿色连接由 Ubuntu 上的 Claude Desktop 经本地 hostmcp 指向 Windows hostagent。Windows 本地授权页管理会话，hostagent 提供文件、命令和真实桌面能力。</desc>
+  <defs>
+    <marker id="blueArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#3769c8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="tealArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#087e83" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="grayArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#8a9bb1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <style>
+      text { font-family: 'Microsoft YaHei','PingFang SC','Noto Sans CJK SC','Segoe UI',sans-serif; }
+      .heading { fill:#142c47; font-size:28px; font-weight:700; }
+      .name { fill:#19334f; font-size:25px; font-weight:600; }
+      .body { fill:#556b82; font-size:20px; }
+      .label { font-size:21px; font-weight:600; }
+      .mono { font-family:'Cascadia Code','Consolas',monospace; font-size:20px; }
+      .wire { fill:none; stroke:#8a9bb1; stroke-width:2; marker-end:url(#grayArrow); }
+    </style>
+  </defs>
+  <rect x="1" y="1" width="1118" height="902" rx="22" fill="#ffffff" stroke="#dbe4ed"/>
+  <path d="M24 1 H1096 Q1119 1 1119 24 V106 H1 V24 Q1 1 24 1" fill="#f5f8fc"/>
+  <text x="32" y="49" fill="#142c47" font-size="30" font-weight="700">两条连接，分清谁在操作谁</text>
+  <text x="32" y="83" class="body">你通过远程桌面使用 Claude，Claude 通过 MCP 调用本机工具。</text>
+
+  <rect x="24" y="122" width="404" height="660" rx="16" fill="#f7f9fc"/>
+  <rect x="692" y="122" width="404" height="660" rx="16" fill="#f7f9fc"/>
+  <g fill="none" stroke="#3769c8" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="43" y="140" width="29" height="21" rx="3"/><path d="M57 161 V168 M49 168 H65"/>
+  </g>
+  <text x="86" y="163" class="heading">本地 Windows</text>
+  <text x="43" y="193" class="body">你的电脑 · 实际被控制的设备</text>
+  <g fill="none" stroke="#087e83" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M712 160 H741 Q749 160 749 153 Q749 146 742 146 Q741 136 731 136 Q721 136 719 145 Q711 145 711 152 Q711 157 715 160"/>
+  </g>
+  <text x="761" y="163" class="heading">Ubuntu 云服务器</text>
+  <text x="711" y="193" class="body">图形桌面 · Claude 所在的环境</text>
+
+  <rect x="40" y="218" width="372" height="92" rx="12" fill="#eef4ff" stroke="#c2d5f6"/>
+  <text x="62" y="256" class="name">远程桌面客户端</text>
+  <text x="62" y="287" class="body">Windows 自带 mstsc 等工具</text>
+  <rect x="708" y="218" width="372" height="92" rx="12" fill="#eef4ff" stroke="#c2d5f6"/>
+  <text x="730" y="256" class="name">XFCE + xrdp</text>
+  <text x="730" y="287" class="body">接收远程桌面连接</text>
+
+  <path d="M414 264 H704" fill="none" stroke="#3769c8" stroke-width="2.7" marker-end="url(#blueArrow)"/>
+  <text x="560" y="241" text-anchor="middle" class="label" fill="#3769c8">你操作远程桌面</text>
+  <text x="560" y="300" text-anchor="middle" class="mono" fill="#5879ad">RDP / TCP 3389</text>
+
+  <rect x="40" y="376" width="372" height="88" rx="12" fill="#ffffff" stroke="#d6dfe9"/>
+  <circle cx="70" cy="409" r="5" fill="#bf7d23"/>
+  <text x="86" y="417" class="name">本地授权页</text>
+  <text x="62" y="448" class="body">限时启用 / 暂停 / 撤销</text>
+  <rect x="708" y="376" width="372" height="88" rx="12" fill="#ffffff" stroke="#d6dfe9"/>
+  <text x="730" y="414" class="name">Claude Desktop</text>
+  <text x="730" y="445" class="body">你在 Ubuntu 中使用的客户端</text>
+  <path d="M894 311 V371" class="wire"/>
+  <text x="912" y="348" class="body">桌面内运行</text>
+
+  <path d="M226 465 V525" class="wire"/>
+  <text x="245" y="502" class="body">本地管理会话</text>
+  <path d="M894 465 V525" class="wire"/>
+  <text x="912" y="502" class="body">stdio MCP</text>
+
+  <rect x="40" y="530" width="372" height="108" rx="12" fill="#eaf7f6" stroke="#afd8d5" stroke-width="1.5"/>
+  <text x="62" y="573" fill="#08666b" font-family="Consolas,monospace" font-size="29" font-weight="700">hostagent</text>
+  <text x="62" y="610" class="body">Windows 执行代理 · 默认暂停</text>
+  <rect x="708" y="530" width="372" height="108" rx="12" fill="#eaf7f6" stroke="#afd8d5" stroke-width="1.5"/>
+  <text x="730" y="573" fill="#08666b" font-family="Consolas,monospace" font-size="29" font-weight="700">hostmcp</text>
+  <text x="730" y="610" class="body">MCP 适配器 · 在 Ubuntu 本地运行</text>
+
+  <path d="M706 584 H416" fill="none" stroke="#087e83" stroke-width="2.7" marker-end="url(#tealArrow)"/>
+  <text x="560" y="561" text-anchor="middle" class="label" fill="#087e83">Claude 调用本机工具</text>
+  <text x="560" y="620" text-anchor="middle" class="mono" fill="#397f83">mTLS / TCP 7443</text>
+
+  <path d="M226 639 V663 M100 691 V663 H352 V691 M226 663 V691" fill="none" stroke="#a2b2c2" stroke-width="1.8"/>
+  <g fill="#ffffff" stroke="#d6dfe9">
+    <rect x="40" y="691" width="120" height="65" rx="9"/>
+    <rect x="166" y="691" width="120" height="65" rx="9"/>
+    <rect x="292" y="691" width="120" height="65" rx="9"/>
+  </g>
+  <g fill="#29455f" font-size="20" font-weight="600" text-anchor="middle">
+    <text x="100" y="730">工作区文件</text>
+    <text x="226" y="730">命令与任务</text>
+    <text x="352" y="730">真实桌面</text>
+  </g>
+  <text x="708" y="693" class="body">跨设备连接均经 Tailscale 私网</text>
+  <text x="708" y="725" class="body">控制通道校验 IP 与双方证书</text>
+  <text x="708" y="757" class="body">截图和工具结果沿原通道返回</text>
+
+  <path d="M32 805 H1088" stroke="#dbe4ed"/>
+  <circle cx="44" cy="836" r="5" fill="#3769c8"/>
+  <text x="61" y="843" fill="#3769c8" font-size="20" font-weight="600">Windows → Ubuntu：你使用 Claude</text>
+  <circle cx="582" cy="836" r="5" fill="#087e83"/>
+  <text x="599" y="843" fill="#087e83" font-size="20" font-weight="600">Ubuntu → Windows：Claude 使用工具</text>
+  <text x="32" y="877" fill="#6c7e91" font-size="18">实际控制范围由本地授权决定；真实桌面与程序执行不构成主机沙箱。</text>
+</svg>

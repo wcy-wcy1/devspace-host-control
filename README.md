@@ -37,6 +37,11 @@ DevSpace Host Control 包含一个 **HostControl 项目**和一个**自包含 Co
 
 ## 工作原理
 
+[![系统架构：两条连接分别用于远程桌面和 Claude 工具调用](docs/assets/architecture.png)](docs/assets/architecture.svg)
+
+<details>
+<summary>查看可编辑的 Mermaid 架构源码</summary>
+
 ```mermaid
 flowchart LR
     subgraph LOCAL[本地 Windows]
@@ -61,6 +66,8 @@ flowchart LR
     RDP <-->|指定私网地址 · TCP 3389| XRDP
     MCP <-->|指定私网地址 · 双向 TLS · TCP 7443| AGENT
 ```
+
+</details>
 
 **两条独立连接：** Windows → Ubuntu 用于远程桌面；Ubuntu → Windows 用于工具调用。MCP 适配器在 Ubuntu 本地运行，由 Claude Desktop 启动，跨设备采用 HTTPS JSON RPC。
 
