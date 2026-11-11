@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.9'
+          cache: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Go tests
+        working-directory: hostcontrol
+        run: go test ./... -count=1
+      - name: Go vet
+        working-directory: hostcontrol
+        run: go vet ./...
+      - name: Configuration tests
+        run: python skills/devspace-host-control/scripts/test_configure.py -v
+      - name: Skill integrity and source consistency
+        run: python scripts/verify_repository.py
+      - name: Ubuntu installer syntax
+        if: runner.os == 'Linux'
+        run: bash -n skills/devspace-host-control/scripts/ubuntu-desktop.sh

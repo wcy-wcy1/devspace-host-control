@@ -1,0 +1,10 @@
+DevSpace Host Control
+
+An independent host-control extension developed from the architecture study of
+DevSpace (https://github.com/loft-sh/devspace), fixed research base:
+8ff6260787edacfa2c0d30d1ff62358d36d482bc.
+
+This repository publishes the new HostControl module and its companion skill.
+It does not contain the full upstream Kubernetes project and is not an official
+DevSpace or Anthropic product. Upstream and project licensing: Apache-2.0.
+The preserved upstream license is also included in the skill assets.

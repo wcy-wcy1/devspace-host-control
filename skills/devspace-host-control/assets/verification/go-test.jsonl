@@ -1,0 +1,72 @@
+{"Time":"2026-11-11T11:50:19.5434137+08:00","Action":"start","Package":"github.com/loft-sh/devspace/hostcontrol/cmd/hostagent"}
+{"Time":"2026-11-11T11:50:19.5434137+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/cmd/hostagent","Output":"?   \tgithub.com/loft-sh/devspace/hostcontrol/cmd/hostagent\t[no test files]\n"}
+{"Time":"2026-11-11T11:50:19.5434137+08:00","Action":"skip","Package":"github.com/loft-sh/devspace/hostcontrol/cmd/hostagent","Elapsed":0}
+{"Time":"2026-11-11T11:50:19.5434137+08:00","Action":"start","Package":"github.com/loft-sh/devspace/hostcontrol/cmd/hostctl"}
+{"Time":"2026-11-11T11:50:19.5434137+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/cmd/hostctl","Output":"?   \tgithub.com/loft-sh/devspace/hostcontrol/cmd/hostctl\t[no test files]\n"}
+{"Time":"2026-11-11T11:50:19.5434137+08:00","Action":"skip","Package":"github.com/loft-sh/devspace/hostcontrol/cmd/hostctl","Elapsed":0}
+{"Time":"2026-11-11T11:50:19.5434137+08:00","Action":"start","Package":"github.com/loft-sh/devspace/hostcontrol/cmd/hostmcp"}
+{"Time":"2026-11-11T11:50:19.5434137+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/cmd/hostmcp","Output":"?   \tgithub.com/loft-sh/devspace/hostcontrol/cmd/hostmcp\t[no test files]\n"}
+{"Time":"2026-11-11T11:50:19.5434137+08:00","Action":"skip","Package":"github.com/loft-sh/devspace/hostcontrol/cmd/hostmcp","Elapsed":0}
+{"Time":"2026-11-11T11:50:19.9686093+08:00","Action":"start","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host"}
+{"Time":"2026-11-11T11:50:20.5837072+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestWindowsInputLayout"}
+{"Time":"2026-11-11T11:50:20.5837072+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestWindowsInputLayout","Output":"=== RUN   TestWindowsInputLayout\n"}
+{"Time":"2026-11-11T11:50:20.5837072+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestWindowsInputLayout","Output":"--- PASS: TestWindowsInputLayout (0.00s)\n"}
+{"Time":"2026-11-11T11:50:20.5837072+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestWindowsInputLayout","Elapsed":0}
+{"Time":"2026-11-11T11:50:20.5837072+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestDesktopCaptureOptIn"}
+{"Time":"2026-11-11T11:50:20.5837072+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestDesktopCaptureOptIn","Output":"=== RUN   TestDesktopCaptureOptIn\n"}
+{"Time":"2026-11-11T11:50:20.5837072+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestDesktopCaptureOptIn","Output":"    desktop_windows_test.go:32: set HOSTCONTROL_DESKTOP_QA=1 for read-only live-window capture validation\n"}
+{"Time":"2026-11-11T11:50:20.5837072+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestDesktopCaptureOptIn","Output":"--- SKIP: TestDesktopCaptureOptIn (0.00s)\n"}
+{"Time":"2026-11-11T11:50:20.5837072+08:00","Action":"skip","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestDesktopCaptureOptIn","Elapsed":0}
+{"Time":"2026-11-11T11:50:20.5837072+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestConfigRejectsBroadSources"}
+{"Time":"2026-11-11T11:50:20.5837072+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestConfigRejectsBroadSources","Output":"=== RUN   TestConfigRejectsBroadSources\n"}
+{"Time":"2026-11-11T11:50:20.5876013+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestConfigRejectsBroadSources","Output":"--- PASS: TestConfigRejectsBroadSources (0.00s)\n"}
+{"Time":"2026-11-11T11:50:20.5876013+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestConfigRejectsBroadSources","Elapsed":0}
+{"Time":"2026-11-11T11:50:20.5876013+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestSessionWritesDedupAndPersistentRevocation"}
+{"Time":"2026-11-11T11:50:20.5876013+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestSessionWritesDedupAndPersistentRevocation","Output":"=== RUN   TestSessionWritesDedupAndPersistentRevocation\n"}
+{"Time":"2026-11-11T11:50:20.6041661+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestSessionWritesDedupAndPersistentRevocation","Output":"--- PASS: TestSessionWritesDedupAndPersistentRevocation (0.02s)\n"}
+{"Time":"2026-11-11T11:50:20.6041661+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestSessionWritesDedupAndPersistentRevocation","Elapsed":0.02}
+{"Time":"2026-11-11T11:50:20.6041661+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestWorkspaceTraversalAndSymlink"}
+{"Time":"2026-11-11T11:50:20.6041661+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestWorkspaceTraversalAndSymlink","Output":"=== RUN   TestWorkspaceTraversalAndSymlink\n"}
+{"Time":"2026-11-11T11:50:20.6395416+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestWorkspaceTraversalAndSymlink","Output":"--- PASS: TestWorkspaceTraversalAndSymlink (0.04s)\n"}
+{"Time":"2026-11-11T11:50:20.6395416+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestWorkspaceTraversalAndSymlink","Elapsed":0.04}
+{"Time":"2026-11-11T11:50:20.6395416+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestExpiredAndDisabledCapabilities"}
+{"Time":"2026-11-11T11:50:20.6395416+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestExpiredAndDisabledCapabilities","Output":"=== RUN   TestExpiredAndDisabledCapabilities\n"}
+{"Time":"2026-11-11T11:50:20.642169+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestExpiredAndDisabledCapabilities","Output":"--- PASS: TestExpiredAndDisabledCapabilities (0.00s)\n"}
+{"Time":"2026-11-11T11:50:20.642169+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestExpiredAndDisabledCapabilities","Elapsed":0}
+{"Time":"2026-11-11T11:50:20.642169+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestMCPWireFormat"}
+{"Time":"2026-11-11T11:50:20.642169+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestMCPWireFormat","Output":"=== RUN   TestMCPWireFormat\n"}
+{"Time":"2026-11-11T11:50:20.6426932+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestMCPWireFormat","Output":"--- PASS: TestMCPWireFormat (0.00s)\n"}
+{"Time":"2026-11-11T11:50:20.6426932+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestMCPWireFormat","Elapsed":0}
+{"Time":"2026-11-11T11:50:20.6426932+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestMutualTLSAndSourceFilter"}
+{"Time":"2026-11-11T11:50:20.6426932+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestMutualTLSAndSourceFilter","Output":"=== RUN   TestMutualTLSAndSourceFilter\n"}
+{"Time":"2026-11-11T11:50:20.6795511+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestMutualTLSAndSourceFilter","Output":"2026/11/11 11:50:20 http: TLS handshake error from 127.0.0.1:52274: remote error: tls: bad certificate\n"}
+{"Time":"2026-11-11T11:50:20.6826875+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestMutualTLSAndSourceFilter","Output":"2026/11/11 11:50:20 http: TLS handshake error from 127.0.0.1:52276: tls: client didn't provide a certificate\n"}
+{"Time":"2026-11-11T11:50:20.6884227+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestMutualTLSAndSourceFilter","Output":"--- PASS: TestMutualTLSAndSourceFilter (0.05s)\n"}
+{"Time":"2026-11-11T11:50:20.6884227+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestMutualTLSAndSourceFilter","Elapsed":0.05}
+{"Time":"2026-11-11T11:50:20.6884227+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestControlLocalOnlyAndNoCSRF"}
+{"Time":"2026-11-11T11:50:20.6884227+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestControlLocalOnlyAndNoCSRF","Output":"=== RUN   TestControlLocalOnlyAndNoCSRF\n"}
+{"Time":"2026-11-11T11:50:20.6931599+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestControlLocalOnlyAndNoCSRF","Output":"--- PASS: TestControlLocalOnlyAndNoCSRF (0.00s)\n"}
+{"Time":"2026-11-11T11:50:20.6931599+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestControlLocalOnlyAndNoCSRF","Elapsed":0}
+{"Time":"2026-11-11T11:50:20.6931599+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestExecutionOutputAndProcessTreeCancellation"}
+{"Time":"2026-11-11T11:50:20.6931599+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestExecutionOutputAndProcessTreeCancellation","Output":"=== RUN   TestExecutionOutputAndProcessTreeCancellation\n"}
+{"Time":"2026-11-11T11:50:23.1955588+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestExecutionOutputAndProcessTreeCancellation","Output":"--- PASS: TestExecutionOutputAndProcessTreeCancellation (2.50s)\n"}
+{"Time":"2026-11-11T11:50:23.1960861+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestExecutionOutputAndProcessTreeCancellation","Elapsed":2.5}
+{"Time":"2026-11-11T11:50:23.1960861+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestExecutionHelper"}
+{"Time":"2026-11-11T11:50:23.1960861+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestExecutionHelper","Output":"=== RUN   TestExecutionHelper\n"}
+{"Time":"2026-11-11T11:50:23.1960861+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestExecutionHelper","Output":"--- PASS: TestExecutionHelper (0.00s)\n"}
+{"Time":"2026-11-11T11:50:23.1960861+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestExecutionHelper","Elapsed":0}
+{"Time":"2026-11-11T11:50:23.1960861+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestOutputLimit"}
+{"Time":"2026-11-11T11:50:23.1960861+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestOutputLimit","Output":"=== RUN   TestOutputLimit\n"}
+{"Time":"2026-11-11T11:50:23.1960861+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestOutputLimit","Output":"--- PASS: TestOutputLimit (0.00s)\n"}
+{"Time":"2026-11-11T11:50:23.1960861+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestOutputLimit","Elapsed":0}
+{"Time":"2026-11-11T11:50:23.1960861+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestPairingCLILibraryRoundTrip"}
+{"Time":"2026-11-11T11:50:23.1960861+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestPairingCLILibraryRoundTrip","Output":"=== RUN   TestPairingCLILibraryRoundTrip\n"}
+{"Time":"2026-11-11T11:50:23.7182343+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestPairingCLILibraryRoundTrip","Output":"--- PASS: TestPairingCLILibraryRoundTrip (0.52s)\n"}
+{"Time":"2026-11-11T11:50:23.7185566+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestPairingCLILibraryRoundTrip","Elapsed":0.52}
+{"Time":"2026-11-11T11:50:23.7185566+08:00","Action":"run","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestArgumentValidationBeforeSideEffects"}
+{"Time":"2026-11-11T11:50:23.7185566+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestArgumentValidationBeforeSideEffects","Output":"=== RUN   TestArgumentValidationBeforeSideEffects\n"}
+{"Time":"2026-11-11T11:50:23.7222867+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestArgumentValidationBeforeSideEffects","Output":"--- PASS: TestArgumentValidationBeforeSideEffects (0.00s)\n"}
+{"Time":"2026-11-11T11:50:23.7222867+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Test":"TestArgumentValidationBeforeSideEffects","Elapsed":0}
+{"Time":"2026-11-11T11:50:23.7222867+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Output":"PASS\n"}
+{"Time":"2026-11-11T11:50:23.7277636+08:00","Action":"output","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Output":"ok  \tgithub.com/loft-sh/devspace/hostcontrol/internal/host\t3.759s\n"}
+{"Time":"2026-11-11T11:50:23.7277636+08:00","Action":"pass","Package":"github.com/loft-sh/devspace/hostcontrol/internal/host","Elapsed":3.759}

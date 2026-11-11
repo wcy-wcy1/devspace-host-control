@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+/dist/
+/private/
+*.log
+*.pem
+*.key
+*.csr
+agent.json
+client.json
+.env
+.env.*
+!.env.example

@@ -1,0 +1,4 @@
+interface:
+  display_name: "DevSpace Host Control"
+  short_description: "Deploy private Ubuntu Claude Desktop control of a Windows host"
+  default_prompt: "Use $devspace-host-control to configure and verify Ubuntu Claude Desktop access to my Windows host."
