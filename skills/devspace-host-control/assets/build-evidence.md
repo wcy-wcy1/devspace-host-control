@@ -212,3 +212,49 @@ the task's delivery report; building/testing alone does not establish those.
   unverified. Docker containment/network behavior requires live acceptance.
 - No production agent, installed skill, account, file grant, session, firewall,
   server or main-thread checkout was changed. This capability remains opt-in.
+
+## Real Codex/container/MCP acceptance — 2026-11-17
+
+- Started the existing Docker Desktop Linux engine and built the browser-enabled
+  QA recipe with official Node 22, Git, Chromium and Codex CLI 0.169.0. The tested
+  immutable image ID was
+  `sha256:60fe5e9449ed46d6e385c63b8b02eba2545d4a2440fbe46ba24aa25d06f8eab0`.
+  Docker Hub connectivity initially failed; the official base image was fetched
+  through Google's Docker Hub cache, validating compressed/uncompressed layer
+  digests before import. QA build traffic used a build-scoped local proxy.
+- Used a new private runner login. Device-code login was disabled in the account;
+  normal browser OAuth via the official Windows CLI completed with a dedicated
+  `CODEX_HOME` and file credential store. No main Codex profile was copied and no
+  account security setting was changed. A minimal Node-only login attempt also
+  exposed missing system CA roots/non-executable temporary storage; TLS validation
+  remained enabled throughout recovery.
+- `TestCodexLiveIntegration` passed against actual Git, Docker and model calls in
+  138.78 seconds. It fetched the public `octocat/Hello-World` master commit
+  `7fd1a60b01f91b314f59955a4e4d4e80d8edf11d`. Three real model tasks produced
+  test analysis, a new-file patch and a second-round patch preserving prior edits.
+  Stable request replay did not create duplicate work; a third round was refused.
+- The locally fixed intentionally failing suite returned exit code 7 and
+  `tests.passed: false`, while Codex completed its analysis. Chromium actually
+  rendered a synthetic page with a fresh challenge marker and wrote a 640x480 PNG.
+  Successful Chromium command events were observed, the PNG survived actual
+  loopback pinned mTLS plus MCP JSON-RPC as native image content, and the returned
+  screenshot was visually inspected. This is a synthetic-page screenshot, not a
+  production application test or an image shown inside Claude Desktop.
+- Inspected the actual running container: read-only root, all capabilities
+  dropped, no-new-privileges, 2 GiB memory, bridge network and only the five
+  approved bind mounts with the correct read/write modes. Actual writes to the
+  root/source/baseline were refused. An executable in bounded temporary build
+  scratch ran successfully after explicitly allowing `exec` on that tmpfs while
+  retaining `nosuid,nodev`. No host permissions were expanded.
+- Cancelled a real sleeping test container before model analysis, waited for the
+  terminal cancelled state, independently confirmed container absence and
+  verified that pausing the QA session blocked subsequent result reads. No QA
+  task container remained. Private acceptance metadata and the returned PNG were
+  retained locally; login material was excluded from source and release bundles.
+- The existing production agent, Claude Desktop configuration, firewall,
+  pairing and main-thread checkout were preserved. Real Claude Desktop tool
+  discovery and its rendering of these images/resources remain unverified.
+- Final regression checks passed: Go tests/vet, all 9 runner tests, all 106
+  Python tests and a cached rebuild from the distributed `Dockerfile.qa` recipe.
+  All six runtime binaries were rebuilt after the temporary-mount correction,
+  then source mirroring, hashes/architecture and release archives were refreshed.

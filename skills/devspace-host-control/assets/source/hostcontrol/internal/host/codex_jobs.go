@@ -464,7 +464,7 @@ func (m *codexManager) execute(ctx context.Context, j *codexJob, p CodexProject)
 	m.mu.Unlock()
 }
 func (m *codexManager) dockerArgs(j *codexJob) []string {
-	a := []string{"run", "--pull=never", "--name", "hostcontrol-codex-" + j.ID, "--label", "hostcontrol.codex.job=" + j.ID, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=256", "--memory=2g", "--cpus=2", "--network=bridge", "--tmpfs", "/tmp:rw,nosuid,nodev,size=768m,mode=1777", "--env", "CODEX_HOME=/tmp/codex", "--env", "HOME=/tmp/home", "--env", "HOSTCONTROL_JOB=/input/request.json"}
+	a := []string{"run", "--pull=never", "--name", "hostcontrol-codex-" + j.ID, "--label", "hostcontrol.codex.job=" + j.ID, "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pids-limit=256", "--memory=2g", "--cpus=2", "--network=bridge", "--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=768m,mode=1777", "--env", "CODEX_HOME=/tmp/codex", "--env", "HOME=/tmp/home", "--env", "HOSTCONTROL_JOB=/input/request.json"}
 	for _, v := range [][3]string{{m.path(j.ID, "workspace"), "/workspace", j.Request.Mode}, {m.path(j.ID, "baseline"), "/baseline", "read-only"}, {m.path(j.ID, "input"), "/input", "read-only"}, {m.path(j.ID, "artifacts"), "/artifacts", "write"}, {filepath.Join(m.cfg.AuthDirectory, "auth.json"), "/auth/auth.json", "read-only"}} {
 		mount := "type=bind,src=" + v[0] + ",dst=" + v[1]
 		if v[2] != "implement" && v[2] != "write" {

@@ -28,6 +28,11 @@ memory and CPU limits form the runtime boundary. Containers are not a VM-grade
 security guarantee; the Docker daemon and image are trusted. The final image is
 pinned by digest/local immutable ID and is never pulled automatically.
 
+The bounded `/tmp` mount intentionally permits execution for test/build binaries,
+while keeping `nosuid,nodev`. Test scratch and Codex state disappear with the
+container. A working directory or a `noexec` flag is not the isolation boundary
+for an agent that can run interpreters and compilers inside its container.
+
 The runner invokes Codex CLI with nested sandboxing disabled **only inside that
 outer container**. Never run `runner.mjs` directly on the host with real Codex.
 The container has bridge-network egress for Codex/required services; there is no
@@ -73,6 +78,16 @@ Complete browser login yourself. Never send login tokens, `auth.json` or API key
 through Claude/MCP/chat. A missing login makes the task fail without an automatic
 retry. Do not add a hidden startup service, auto-enable a host session or change
 the user's main Codex installation to make authentication work.
+
+If the account disables device-code sign-in, use normal browser login from an
+official Windows Codex CLI instead of changing account security settings. Set
+`CODEX_HOME` only for that login process to the **dedicated** auth directory and
+set `cli_auth_credentials_store = "file"` in that profile's `config.toml` so the
+worker can read its `auth.json`. Restore any prior shell environment afterward.
+Using an installed official executable does not require copying its main profile.
+Minimal Node-only images lack a system CA bundle and default temporary mounts
+may be `noexec`; use the built runner image for container login rather than
+disabling TLS checks or repeatedly installing a CLI into a non-executable mount.
 
 Back up the private agent config before applying the following **fragment**.
 Preserve all existing TLS/network/roots/session settings. Explicitly append
@@ -200,6 +215,38 @@ delegating them to another model. Main-host personal data is not mounted.
 
 Offline checks: Go task/policy/Git/artifact tests, Node runner tests (fixture CLI,
 no model request), existing Python tests, rebuilt binaries and bundle hashes.
+`TestCodexLiveIntegration` is opt-in and skipped during normal tests. It reads
+`HOSTCONTROL_CODEX_LIVE_CONFIG`, a private JSON file with `agent` (an isolated
+full agent config), `commit` (an exact public source hash), and `evidence` (an
+existing private output directory). Never pass the production config or its job
+directory. Prepare one approved public QA project, modes `test`/`implement`,
+`max_rounds: 2`, and fixed suites `expected-failure` (exit 7) and `slow` (sleep
+120 seconds). Its image must also contain Chromium for the actual synthetic-page
+screenshot. It makes three real model calls, uses fresh loopback mTLS identities,
+checks native MCP image/resource responses and independently inspects/probes the
+real container before cancellation. It writes `acceptance.json` and `probe.png`
+only after all checks pass. This proves the local worker/transport path; actual
+Claude Desktop tool discovery and image rendering require separate GUI acceptance.
+
+Build the reviewed browser-enabled QA recipe from the repository root, then pin
+the returned immutable image ID in the private QA configuration:
+
+```powershell
+docker build -f hostcontrol/codex-runner/Dockerfile.qa -t hostcontrol-codex-runner:qa ./hostcontrol/codex-runner
+docker image inspect --format '{{.Id}}' hostcontrol-codex-runner:qa
+```
+
+This recipe uses HTTPS package sources, verified public CA roots and package
+caching/retries. If local network access requires a proxy, supply build-scoped
+`http_proxy`/`https_proxy` build arguments; do not copy a previous user's proxy
+address or change global Docker/network settings as part of the test.
+
+```powershell
+$env:HOSTCONTROL_CODEX_LIVE_CONFIG = 'D:\HostControlPrivate\qa\live-config.json'
+try { go test ./internal/host -run '^TestCodexLiveIntegration$' -count=1 -v -timeout 35m }
+finally { Remove-Item Env:HOSTCONTROL_CODEX_LIVE_CONFIG }
+```
+
 For live acceptance, choose a disposable approved repo and dedicated login:
 run a failing test, verify exact commit/exit code; run implement and inspect its
 patch; produce a real screenshot and confirm Claude sees it; cancel a running

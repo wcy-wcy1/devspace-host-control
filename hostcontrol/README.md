@@ -105,6 +105,10 @@ and continuations are explicit bounded new jobs, not resumed desktop threads.
 
 Runner checks: `node --test codex-runner/runner.test.mjs`. These use a fixture
 CLI, real child processes and real Git diffs without model/account access.
+Opt-in real acceptance: `TestCodexLiveIntegration` uses an isolated private
+configuration, real Git/Docker/Codex login, browser PNG and loopback mTLS/MCP.
+See the skill guide for its scope and account requirements. `Dockerfile.qa`
+adds Chromium for this test; the ordinary runner does not include a browser.
 
 Real desktop and arbitrary program execution run as the current Windows user,
 not in a sandbox. Workspace restrictions apply to file APIs only. Lock/UAC and

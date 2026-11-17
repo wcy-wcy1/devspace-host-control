@@ -343,7 +343,7 @@ func TestCodexDockerBoundaryHasOnlyFixedMountsAndReadOnlyTestSource(t *testing.T
 	j := &codexJob{ID: randomID(), Request: codexRequest{Mode: "test"}}
 	argv := m.dockerArgs(j)
 	all := strings.Join(argv, " ")
-	for _, required := range []string{"--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pull=never", "--pids-limit=256", ",dst=/workspace,readonly", ",dst=/auth/auth.json,readonly"} {
+	for _, required := range []string{"--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--pull=never", "--pids-limit=256", "/tmp:rw,exec,nosuid,nodev,size=768m,mode=1777", ",dst=/workspace,readonly", ",dst=/auth/auth.json,readonly"} {
 		if !strings.Contains(all, required) {
 			t.Fatal("missing boundary", required)
 		}
