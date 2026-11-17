@@ -155,3 +155,30 @@ the task's delivery report; building/testing alone does not establish those.
   public port or GPU setting was added. Temporary metadata-only diagnostics were
   removed and the normal receiver restored. Actual OS IME and Ubuntu acceptance
   remain unverified.
+
+
+## Agent restart and reply clock skew — 2026-11-17
+
+- Diagnosed the stopped Windows agent and stale loopback state without reading
+  user message contents. Restarted the existing files-only agent visibly and
+  paused; no file session was automatically enabled. A signed non-input poll
+  confirmed the paired receiver was reachable in 0.45 s without UI input.
+- The receiver's valid response timestamp was about four seconds ahead of the
+  Windows clock, exceeding the previous two-second future limit. Windows now
+  permits at most ten seconds of future reply skew, still verifies the HMAC and
+  exact request ID, and still rejects responses over twenty seconds old. Neither
+  system clock nor timezone was changed.
+- Reconnect explicitly reloads the current DPAPI endpoint and token. Missing or
+  invalid configured state fails closed. Pending input prevents reconnect; no
+  automatic resend, fallback or local text clearing is introduced. Pre-dispatch
+  connection failures now show a useful agent-start instruction instead of the
+  raw GetResult/TaskCanceled exception.
+- All 106 skill Python tests passed on Windows. New tests use temporary DPAPI
+  fixtures for endpoint/token rotation and rejection, bounded reply clock skew,
+  and the actual WPF reconnect callback with draft preservation, pending-submit
+  refusal and missing-state failure. No production credential is in fixtures.
+- The real deployed draft test synchronized Chinese/multiline/emoji edits and
+  clearing with its clipboard marker unchanged. First request queued at 452 ms,
+  newest coalesced draft confirmed at 2.99 s, and final clear at 4.09 s. No Claude
+  message was submitted. Source packaging/integrity checks were rerun; Go
+  production code and runtime binaries were unchanged in this fix.

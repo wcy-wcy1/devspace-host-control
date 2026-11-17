@@ -81,6 +81,8 @@ Restart only this helper on updates; do not restart Claude or RDP unnecessarily.
 ## Each use
 
 1. Connect through `Start-Claude.cmd`, then open an empty Claude message box.
+   Keep the Windows agent console running: closing it stops this relay as well
+   as MCP connectivity. The input panel alone does not start the agent.
 2. Open `Claude-Input.cmd`. **同步输入** starts enabled. Relay mode queues edits
    without the old 600 ms typing debounce, after IME composition is committed.
    One update is in flight; newer edits coalesce to the latest value. Replacement,
@@ -105,7 +107,10 @@ Restart only this helper on updates; do not restart Claude or RDP unnecessarily.
    only if its own packet/result is still current.
 7. After remote edits, manual sends, navigation or an unknown outcome, inspect
    Claude. Leave its editor empty, then click **连接空对话** to reconnect explicitly.
-   A new stream cannot overwrite nonempty unowned text. Unchecking **同步输入**
+   Reconnecting rereads the current DPAPI endpoint and bearer after an agent
+   restart, without clearing local text or retrying old operations. A missing or
+   malformed relay state does not fall back to the clipboard. A new stream cannot
+   overwrite nonempty unowned text. Unchecking **同步输入**
    stops queued work and reply polling, but cannot cancel an already dispatched
    operation or Claude generation. Closing preserves drafts.
 
@@ -121,7 +126,10 @@ to synchronize PRIMARY with CLIPBOARD can defeat clipboard independence.
 Both transports carry HMAC-authenticated bounded `HC-DRAFT/2` and `/3` packets.
 Requests have expiring timestamps, stream IDs and monotonic revisions with the
 last confirmed SHA-256. A consumed request ID is persisted before UI input;
-only IDs are journaled, not draft/reply text. Relay delivery is claimed before
+only IDs are journaled, not draft/reply text. Windows verifies reply HMACs and
+IDs and accepts timestamps at most 10 seconds ahead or 20 seconds old, allowing
+small paired-host clock differences while rejecting stale replies. This does
+not change either host clock or timezone. Relay delivery is claimed before
 writing HTTP, and is not redelivered after disconnect. A matching ticket/session
 is required for acknowledgement. Unknown outcomes block the stream.
 

@@ -45,7 +45,8 @@ function Read-BridgeResult([byte[]]$Key, [string]$Id, [string]$Raw, [switch]$Syn
         $age=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()-[long]$p.at
         $kind=if ($Sync) { 'sync_result' } else { 'result' }
         $allowed=if ($Sync) { @('synced','conflict','not_ready','uncertain') } else { @('filled','not_ready','has_draft','uncertain') }
-        if ($p.kind -ne $kind -or $p.id -cne $Id -or $age -lt -2 -or $age -gt 20 -or $p.status -notin $allowed) { return $null }
+        # Allow bounded clock skew between the paired hosts, never unsigned or stale replies.
+        if ($p.kind -ne $kind -or $p.id -cne $Id -or $age -lt -10 -or $age -gt 20 -or $p.status -notin $allowed) { return $null }
         return $p.status
     } catch { return $null }
 }
@@ -76,7 +77,7 @@ function Read-ChatResult([byte[]]$Key, [string]$Id, [string]$Raw) {
         if ($mac -cne $outer.mac) { return $null }
         $p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($outer.body)) | ConvertFrom-Json
         $age=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()-[long]$p.at
-        if ($p.kind -ne 'chat_result' -or $p.id -cne $Id -or $age -lt -2 -or $age -gt 20 -or $p.status -notin @('submitted','waiting','streaming','complete','changed','conflict','not_ready','uncertain')) { return $null }
+        if ($p.kind -ne 'chat_result' -or $p.id -cne $Id -or $age -lt -10 -or $age -gt 20 -or $p.status -notin @('submitted','waiting','streaming','complete','changed','conflict','not_ready','uncertain')) { return $null }
         if ($null -ne $p.text -and ($p.text -isnot [string] -or $p.text.Length -gt 48000)) { return $null }
         if ($null -ne $p.accepted -and $p.accepted -isnot [bool]) { return $null }
         if ($null -ne $p.truncated -and $p.truncated -isnot [bool]) { return $null }
@@ -89,6 +90,25 @@ function Get-EnterAction([bool]$Shift, [bool]$Composing, [bool]$Repeat) {
     if ($Shift) { return 'newline' }
     if ($Repeat) { return 'ignore' }
     return 'submit'
+}
+function New-RelayConnection([string]$StatePath, [switch]$Required) {
+    if (-not (Test-Path -LiteralPath $StatePath -PathType Leaf)) {
+        if ($Required) { throw '本机代理连接配置不可用，请先启动 Start-Claude.cmd。' }
+        return $null
+    }
+    Add-Type -AssemblyName System.Security
+    Add-Type -AssemblyName System.Net.Http
+    $protected=[IO.File]::ReadAllBytes($StatePath)
+    $header=[Text.Encoding]::ASCII.GetBytes("HOSTCONTROL-DPAPI`n")
+    if($protected.Length -le $header.Length -or [Text.Encoding]::ASCII.GetString($protected,0,$header.Length) -cne "HOSTCONTROL-DPAPI`n"){throw '低延迟连接配置无效。'}
+    $plain=[Security.Cryptography.ProtectedData]::Unprotect($protected[$header.Length..($protected.Length-1)],$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
+    try{$endpoint=[Text.Encoding]::UTF8.GetString($plain)|ConvertFrom-Json}finally{[Array]::Clear($plain,0,$plain.Length)}
+    $uri=[Uri]$endpoint.url
+    if($uri.Scheme -ne 'http' -or $uri.Host -ne '127.0.0.1' -or $uri.AbsolutePath -ne '/input-relay' -or $uri.UserInfo -ne '' -or $uri.Query -ne '' -or $uri.Fragment -ne '' -or $endpoint.token -cnotmatch '^[a-f0-9]{64}$'){throw '低延迟连接必须使用私有本机端点。'}
+    $handler=New-Object System.Net.Http.HttpClientHandler; $handler.UseProxy=$false
+    $http=[System.Net.Http.HttpClient]::new($handler);$http.Timeout=[TimeSpan]::FromSeconds(2)
+    $http.DefaultRequestHeaders.Authorization=[System.Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer',$endpoint.token)
+    return @{http=$http;url=$endpoint.url;session=[Guid]::NewGuid().ToString('N');opened=$false}
 }
 if ($FunctionsOnly) { return }
 Add-Type -AssemblyName PresentationFramework
@@ -106,22 +126,8 @@ if (-not $panelAcquired) {
 if (-not $KeyPath -or -not (Test-Path -LiteralPath $KeyPath -PathType Leaf)) { throw '尚未配对本地输入框，请先完成输入桥接配置。' }
 $key=[Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($KeyPath),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
 if ($key.Length -ne 32) { throw '输入框配对无效。' }
-$script:relay=$null
 $relayPath=Join-Path (Split-Path $KeyPath) 'relay-state.dpapi'
-if(Test-Path -LiteralPath $relayPath){
-    $protected=[IO.File]::ReadAllBytes($relayPath)
-    $header=[Text.Encoding]::ASCII.GetBytes("HOSTCONTROL-DPAPI`n")
-    if($protected.Length -le $header.Length -or [Text.Encoding]::ASCII.GetString($protected,0,$header.Length) -cne "HOSTCONTROL-DPAPI`n"){throw '低延迟连接配置无效。'}
-    $plain=[Security.Cryptography.ProtectedData]::Unprotect($protected[$header.Length..($protected.Length-1)],$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
-    try{$endpoint=[Text.Encoding]::UTF8.GetString($plain)|ConvertFrom-Json}finally{[Array]::Clear($plain,0,$plain.Length)}
-    $uri=[Uri]$endpoint.url
-    if($uri.Scheme -ne 'http' -or $uri.Host -ne '127.0.0.1' -or $uri.AbsolutePath -ne '/input-relay' -or $uri.UserInfo -ne '' -or $uri.Query -ne '' -or $uri.Fragment -ne '' -or $endpoint.token -cnotmatch '^[a-f0-9]{64}$'){throw '低延迟连接必须使用私有本机端点。'}
-    $handler=New-Object System.Net.Http.HttpClientHandler; $handler.UseProxy=$false
-    $http=[System.Net.Http.HttpClient]::new($handler);$http.Timeout=[TimeSpan]::FromSeconds(2)
-    $http.DefaultRequestHeaders.Authorization=[System.Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer',$endpoint.token)
-    $script:relay=@{http=$http;url=$endpoint.url;session=[Guid]::NewGuid().ToString('N');opened=$false}
-    $endpoint=$null
-}
+$script:relay=New-RelayConnection $relayPath
 function New-RelayTask($Body){
     $Body.session=$script:relay.session
     $content=[System.Net.Http.StringContent]::new(($Body|ConvertTo-Json -Compress),[Text.Encoding]::UTF8,'application/json')
@@ -284,8 +290,13 @@ function Start-DraftSync([string]$Kind='sync') {
         elseif($Kind -eq 'poll'){$replyState.Text='正在获取 Claude 回复…'}
         else{$status.Text='正在同步… 最新内容确认后再发送。'}
     } catch {
+        $wasDispatched=$null -ne $script:sync.pending
         $script:sync.pending=$null; $resume.IsEnabled=$true; $recoverReply.IsEnabled=$true
-        Stop-DraftSync ('未开始同步：'+$_.Exception.Message)
+        if($script:relay -and -not $wasDispatched){
+            Stop-DraftSync '本机代理未连接。请先运行 Start-Claude.cmd，再点击「连接空对话」；本次没有提交消息。'
+        }elseif($wasDispatched){
+            Stop-DraftSync '请求结果未知，请先检查远端草稿或消息；不会自动重发。'
+        }else{Stop-DraftSync ('未开始同步：'+$_.Exception.Message)}
     }
 }
 $timer=New-Object Windows.Threading.DispatcherTimer
@@ -471,7 +482,16 @@ $live.Add_Checked({
 })
 $resume.Add_Click({
     if ($null -ne $script:sync.pending) { return }
-    if($script:relay -and $script:relay.opened){try{Invoke-RelayLocal @{action='close'}}catch{};$script:relay.opened=$false}
+    if($script:relay -or (Test-Path -LiteralPath $relayPath)){
+        try{$refreshedRelay=New-RelayConnection $relayPath -Required}
+        catch{Stop-DraftSync '无法刷新本机代理连接，请先运行 Start-Claude.cmd，再重新连接。';return}
+        if($script:relay){
+            if($script:relay.opened){try{Invoke-RelayLocal @{action='close'}}catch{}}
+            $script:relay.http.Dispose()
+        }
+        $script:relay=$refreshedRelay
+        $script:sync.inputDelayMs=0
+    }
     $script:sync.stream=[Guid]::NewGuid().ToString('N'); $script:sync.seq=0
     $script:sync.confirmed=''; $script:sync.paused=$false
     $script:sync.replyActive=$false; $script:sync.awaiting=$false; $script:sync.sendWanted=$false
