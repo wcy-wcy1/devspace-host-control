@@ -85,6 +85,9 @@ Restart only this helper on updates; do not restart Claude or RDP unnecessarily.
    without the old 600 ms typing debounce, after IME composition is committed.
    One update is in flight; newer edits coalesce to the latest value. Replacement,
    deletion and clearing apply only to the owned confirmed draft.
+   If the panel is already open, another launch exits normally without opening
+   a second instance. Use Alt+Tab to switch to **Claude 本地对话**; existing text
+   is preserved.
 3. **Enter / 发送** first confirms the latest text, then triggers one submit.
    The input stays frozen until a new exactly matching user turn is observed.
    Only confirmed acceptance clears local text. **Shift+Enter** adds a newline.

@@ -98,7 +98,11 @@ Add-Type -AssemblyName System.Net.Http
 $panelMutex=New-Object Threading.Mutex($false,'Local\HostControl-Claude-Chat-Panel-v4')
 $panelAcquired=$false
 try { $panelAcquired=$panelMutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $panelAcquired=$true }
-if (-not $panelAcquired) { $panelMutex.Dispose(); throw '本地输入框已经打开，请使用已有窗口。' }
+if (-not $panelAcquired) {
+    $panelMutex.Dispose()
+    Write-Host '本地对话框已在运行。请按 Alt+Tab 切换到「Claude 本地对话」。'
+    return
+}
 if (-not $KeyPath -or -not (Test-Path -LiteralPath $KeyPath -PathType Leaf)) { throw '尚未配对本地输入框，请先完成输入桥接配置。' }
 $key=[Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes($KeyPath),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser)
 if ($key.Length -ne 32) { throw '输入框配对无效。' }
