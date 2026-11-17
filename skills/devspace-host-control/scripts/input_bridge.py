@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Paired RDP draft bridge: fill or synchronize a Claude draft, never submit."""
+"""Paired RDP chat bridge: drafts, explicit submission and scoped reply snapshots."""
 import argparse
 import base64
 import hashlib
@@ -14,7 +14,10 @@ import time
 
 PREFIX = 'HC-DRAFT/1 '
 SYNC_PREFIX = 'HC-DRAFT/2 '
+CHAT_PREFIX = 'HC-DRAFT/3 '
 MAX_TEXT = 4000
+MAX_REPLY = 24000
+MAX_PACKET = 262144
 TTL = 15
 PROMPT_HINTS = ('reply to claude', 'write your prompt', 'message claude',
                 'how can i help', '回复 claude', '向 claude', '发送消息', '你想聊', '给 claude',
@@ -28,8 +31,8 @@ def packet(key, payload, prefix=PREFIX):
 
 
 def unpack(key, raw, now=None):
-    prefix = SYNC_PREFIX if raw.startswith(SYNC_PREFIX) else PREFIX
-    if not raw.startswith(prefix) or len(raw) > 65536:
+    prefix = next((p for p in (CHAT_PREFIX, SYNC_PREFIX, PREFIX) if raw.startswith(p)), None)
+    if prefix is None or len(raw) > MAX_PACKET:
         raise ValueError('Not a bridge packet')
     outer = json.loads(base64.b64decode(raw[len(prefix):], validate=True))
     body, mac = outer['body'], outer['mac']
@@ -45,8 +48,13 @@ def unpack(key, raw, now=None):
         raise ValueError('Expired packet; do not retry automatically')
     if not re.fullmatch('[a-f0-9]{32}', value.get('id', '')):
         raise ValueError('Invalid message ID')
-    sync = prefix == SYNC_PREFIX
-    if value.get('kind') != ('sync' if sync else 'draft'):
+    sync = prefix in (SYNC_PREFIX, CHAT_PREFIX)
+    kind = value.get('kind')
+    if prefix == CHAT_PREFIX and kind == 'poll':
+        if not re.fullmatch('[a-f0-9]{32}', value.get('turn', '')) or not re.fullmatch('[a-f0-9]{32}', value.get('stream', '')):
+            raise ValueError('Invalid reply watch')
+        return value
+    if kind != ('submit' if prefix == CHAT_PREFIX else 'sync' if sync else 'draft'):
         raise ValueError('Not a draft')
     if sync and (not re.fullmatch('[a-f0-9]{32}', value.get('stream', ''))
                  or not isinstance(value.get('seq'), int) or isinstance(value['seq'], bool)
@@ -57,6 +65,8 @@ def unpack(key, raw, now=None):
     if (not isinstance(text, str) or (not sync and not text.strip()) or len(text) > MAX_TEXT
             or any((ord(c) < 32 and c not in '\r\n\t') or 0xD800 <= ord(c) <= 0xDFFF for c in text)):
         raise ValueError('Invalid text')
+    if kind == 'submit' and not text.strip():
+        raise ValueError('Cannot submit an empty draft')
     return value
 
 
@@ -73,7 +83,7 @@ def load_key(path):
 def clipboard_read():
     result = subprocess.run(['xclip', '-selection', 'clipboard', '-out', '-target', 'UTF8_STRING'],
                             capture_output=True, timeout=2)
-    return result.stdout.decode('utf-8') if result.returncode == 0 and len(result.stdout) <= 65536 else ''
+    return result.stdout.decode('utf-8') if result.returncode == 0 and len(result.stdout) <= MAX_PACKET else ''
 
 
 def clipboard_write(value):
@@ -213,6 +223,18 @@ def paste_prompt(node, text, runner=desktop_command, read=accessible_text,
     return False  # Unknown result is never replayed.
 
 
+def submit_prompt(node, text, runner=desktop_command, read=accessible_text,
+                  focused=editor_focused):
+    """An explicit submit, guarded independently from ordinary draft updates."""
+    window = runner(['xdotool', 'getwindowfocus'])
+    if (not window.isdigit() or not text.strip() or not focused(node)
+            or runner(['xdotool', 'getwindowpid', window]) != str(node.get_application().get_process_id())
+            or read(node) != text):
+        return False
+    runner(['xdotool', 'key', '--clearmodifiers', 'Return'])
+    return True  # Dispatched once; confirmation is handled separately.
+
+
 def atspi_tools():
     import gi
     gi.require_version('Atspi', '2.0')
@@ -280,17 +302,21 @@ def prompt_context(node):
 
 class DraftSync:
     """An in-memory lease for one editor, with compare-before-replace revisions."""
-    def __init__(self, find, focus, read, write, context=prompt_context, validate=None):
+    def __init__(self, find, focus, read, write, context=prompt_context, validate=None, submit=None):
         self.find, self.focus, self.read, self.write, self.context = find, focus, read, write, context
         self.validate = validate
+        self.submit = submit
         self.owner = None
 
     def apply(self, message):
         stream, seq, base, text = (message[k] for k in ('stream', 'seq', 'base', 'text'))
+        submitting = message['kind'] == 'submit'
         try:
             # Once attached, validate the exact retained editor instead of walking
             # the entire app on every keystroke burst. Never choose a new target.
             owned = self.owner and self.owner['stream'] == stream
+            if submitting and (not owned or self.submit is None):
+                return 'conflict'
             if owned and self.owner['blocked']:
                 return 'conflict'
             if owned and self.validate:
@@ -301,6 +327,8 @@ class DraftSync:
                 return 'not_ready'
             target = nodes[0]
             current, context = self.read(target), self.context(target)
+            if submitting and current != text:
+                return 'conflict'
             if self.owner and self.owner['stream'] == stream:
                 owner = self.owner
                 if (owner['blocked'] or seq <= owner['seq'] or target != owner['target']
@@ -327,6 +355,10 @@ class DraftSync:
                 self.owner['blocked'] = True
             return 'not_ready'
         try:
+            if submitting:
+                # The receiver journals the request before entering this path.
+                # Keep the lease blocked: no repeated Enter after any outcome.
+                return 'submitted' if self.submit(target, text, message) else 'uncertain'
             if current != text and not self.write(target, text, current):
                 return 'uncertain'
             if self.read(target) != text or self.context(target) != context:
@@ -337,10 +369,137 @@ class DraftSync:
             return 'uncertain'
 
 
+def walk_ui(root, limit=6000):
+    stack, count, deadline = [root], 0, time.monotonic() + 5
+    while stack:
+        node = stack.pop()
+        count += 1
+        if count > limit or time.monotonic() > deadline:
+            raise ValueError('Conversation accessibility tree is too large')
+        yield node
+        stack.extend(node.get_child_at_index(i) for i in reversed(range(min(node.get_child_count(), 600)))
+                     if node.get_child_at_index(i) is not None)
+
+
+USER_LABELS = ('您说：', 'You said: ', 'You said:')
+CLAUDE_LABELS = ('Claude 已回复：', 'Claude said:', 'Claude replied:', 'Claude 说：')
+CHAT_LABELS = ('对话消息', 'Conversation messages', 'Chat messages')
+STOP_LABELS = ('停止回复', '停止生成', '停止回应', 'Stop response', 'Stop generating')
+
+
+def message_body(root):
+    """Only message content; exclude screen-reader summaries and action toolbars."""
+    parts, stack, visited = [], [root], 0
+    while stack:
+        node = stack.pop(); visited += 1
+        if visited > 5000:
+            raise ValueError('Message is too large')
+        attrs = node.get_attributes() or {}
+        role = node.get_role_name()
+        if 'sr-only' in attrs.get('class', '').split() or role in ('tool bar', 'push button', 'entry'):
+            continue
+        if role in ('paragraph', 'heading', 'static', 'code'):
+            try:
+                value = accessible_text(node)
+            except Exception:
+                value = ''
+            if value:
+                parts.append(value)
+                if sum(map(len, parts)) > MAX_REPLY:
+                    break
+                continue
+        stack.extend(node.get_child_at_index(i) for i in reversed(range(min(node.get_child_count(), 600)))
+                     if node.get_child_at_index(i) is not None)
+    text = '\n'.join(parts)
+    return text[:MAX_REPLY], len(text) > MAX_REPLY
+
+
+def conversation_view(prompt):
+    app = prompt.get_application()
+    if not claude_pid(app.get_process_id()):
+        raise ValueError('Not the paired Claude application')
+    from gi.repository import Atspi
+    nodes = list(walk_ui(app))
+    panels = [n for n in nodes if n.get_role_name() == 'panel' and n.get_name() in CHAT_LABELS
+              and n.get_state_set().contains(Atspi.StateType.SHOWING)]
+    if len(panels) != 1:
+        # A new empty conversation has no transcript yet.
+        if not panels:
+            return {'panel': None, 'turns': [], 'busy': False}
+        raise ValueError('Cannot identify one current conversation')
+    busy = any(n.get_role_name() == 'push button' and n.get_name() in STOP_LABELS
+               and n.get_state_set().contains(Atspi.StateType.SHOWING) for n in nodes)
+    turns = []
+    for article in walk_ui(panels[0]):
+        if article.get_role_name() != 'article':
+            continue
+        author, label = None, None
+        for node in walk_ui(article):
+            if node.get_role_name() != 'heading' or 'sr-only' not in (node.get_attributes() or {}).get('class', '').split():
+                continue
+            name = node.get_name() or ''
+            for who, prefixes in (('user', USER_LABELS), ('claude', CLAUDE_LABELS)):
+                for prefix in prefixes:
+                    if name.startswith(prefix):
+                        author, label = who, name[len(prefix):]
+        if author is None:
+            raise ValueError('Unrecognized message author')
+        text, truncated = message_body(article) if author == 'claude' else (label, False)
+        complete = author == 'claude' and not busy and any(
+            n.get_role_name() == 'push button' and n.get_name() in ('复制', 'Copy', 'Copy response')
+            for n in walk_ui(article))
+        turns.append({'node': article, 'author': author, 'text': text,
+                      'truncated': truncated, 'complete': complete})
+    return {'panel': panels[0], 'turns': turns, 'busy': busy}
+
+
+class ReplyWatch:
+    def __init__(self, find, read_view=conversation_view, submit=submit_prompt):
+        self.find, self.read_view, self.submit = find, read_view, submit
+        self.watch = None
+
+    def dispatch(self, node, text, message):
+        before = self.read_view(node)
+        if before['busy']:
+            return False
+        self.watch = {'stream': message['stream'], 'turn': message['id'], 'text': text,
+                      'before': [t['node'] for t in before['turns']], 'anchor': None, 'panel': None}
+        return self.submit(node, text)
+
+    def poll(self, message):
+        watch = self.watch
+        if not watch or message['stream'] != watch['stream'] or message['turn'] != watch['turn']:
+            return {'status': 'not_ready'}
+        nodes = self.find()
+        if len(nodes) != 1:
+            return {'status': 'not_ready'}
+        view = self.read_view(nodes[0]); turns = view['turns']
+        matches = [i for i, t in enumerate(turns) if t['author'] == 'user' and t['text'] == watch['text']
+                   and t['node'] not in watch['before']]
+        if watch['anchor'] is None:
+            if len(matches) != 1:
+                return {'status': 'waiting', 'accepted': False}
+            watch['anchor'], watch['panel'] = turns[matches[0]]['node'], view['panel']
+        indices = [i for i, t in enumerate(turns) if t['node'] == watch['anchor']]
+        if len(indices) != 1 or view['panel'] != watch['panel']:
+            return {'status': 'changed'}
+        following = turns[indices[0] + 1:]
+        if any(t['author'] == 'user' for t in following):
+            return {'status': 'changed'}
+        replies = [t for t in following if t['author'] == 'claude']
+        if not replies:
+            return {'status': 'waiting', 'accepted': True}
+        text = '\n\n'.join(t['text'] for t in replies)
+        return {'status': 'complete' if replies[-1]['complete'] else 'streaming',
+                'accepted': True, 'text': text[:MAX_REPLY],
+                'truncated': len(text) > MAX_REPLY or any(t['truncated'] for t in replies)}
+
+
 class Receiver:
-    def __init__(self, key, state, fill, sync=None):
+    def __init__(self, key, state, fill, sync=None, replies=None):
         self.key, self.state, self.fill = key, Path(state), fill
         self.sync = sync
+        self.replies = replies
         self.seen = json.loads(self.state.read_text()) if self.state.exists() else []
         if not isinstance(self.seen, list):
             raise ValueError('Invalid bridge journal')
@@ -351,7 +510,7 @@ class Receiver:
         if identifier in self.seen:
             return None  # Includes attempts with an unknown outcome; never replay.
         self.seen = (self.seen + [identifier])[-4096:]
-        self.last_text = message['text']
+        self.last_text = message.get('text')
         temporary = self.state.with_suffix('.tmp')
         with temporary.open('w', encoding='utf-8') as stream:
             os.chmod(temporary, 0o600)
@@ -360,12 +519,19 @@ class Receiver:
             os.fsync(stream.fileno())
         os.replace(temporary, self.state)  # Persist consumption before any UI input.
         try:
-            status = (self.sync.apply(message) if self.sync else 'not_ready') if message['kind'] == 'sync' else self.fill(message['text'])
+            if message['kind'] == 'poll':
+                result = self.replies.poll(message) if self.replies else {'status': 'not_ready'}
+            else:
+                status = (self.sync.apply(message) if self.sync else 'not_ready') if message['kind'] in ('sync', 'submit') else self.fill(message['text'])
+                result = {'status': status}
         except Exception:
-            status = 'uncertain'
+            result = {'status': 'uncertain'}
+        if message['kind'] in ('submit', 'poll'):
+            return packet(self.key, dict(result, kind='chat_result', id=identifier,
+                                         at=int(time.time())), CHAT_PREFIX)
         sync = message['kind'] == 'sync'
         return packet(self.key, {'kind': 'sync_result' if sync else 'result', 'id': identifier,
-                                'at': int(time.time()), 'status': status}, SYNC_PREFIX if sync else PREFIX)
+                                'at': int(time.time()), **result}, SYNC_PREFIX if sync else PREFIX)
 
 
 def main():
@@ -386,13 +552,14 @@ def main():
         raise ValueError('Bridge state directory must be private')
     with (directory / 'receiver.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        replies = ReplyWatch(tools[0])
         receiver = Receiver(load_key(args.config), directory / 'seen.json',
                             lambda text: fill_prompt(text, *tools),
-                            DraftSync(*tools, validate=valid_atspi_prompt))
+                            DraftSync(*tools, validate=valid_atspi_prompt, submit=replies.dispatch), replies)
         while True:
             try:
                 raw = clipboard_read()
-                if raw.startswith((PREFIX, SYNC_PREFIX)):
+                if raw.startswith((PREFIX, SYNC_PREFIX, CHAT_PREFIX)):
                     result = receiver.receive(raw)
                     # Do not overwrite clipboard changes made while working.
                     if result and clipboard_read() in (raw, receiver.last_text):

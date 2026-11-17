@@ -134,6 +134,132 @@ class SyncTests(unittest.TestCase):
             self.assertNotIn('中文', state.read_text())
 
 
+class ChatTests(unittest.TestCase):
+    def test_explicit_submit_requires_exact_owned_revision_and_is_not_repeated(self):
+        node, storage, enters = object(), [''], []
+        def write(n, text, expected):
+            storage[0] = text
+            return True
+        def submit(n, text, message):
+            enters.append(text)
+            return True
+        sync = bridge.DraftSync(lambda: [node], lambda n: True, lambda n: storage[0], write,
+                                lambda n: 'chat', submit=submit)
+        message = dict(sync_message('hello', 2, 'hello'), kind='submit')
+        self.assertEqual(sync.apply(message), 'conflict')
+        self.assertEqual(sync.apply(sync_message('hello')), 'synced')
+        self.assertEqual(sync.apply(dict(message, text='older')), 'conflict')
+        self.assertEqual(sync.apply(message), 'submitted')
+        self.assertEqual(sync.apply(dict(message, seq=3)), 'conflict')
+        self.assertEqual(enters, ['hello'])
+
+    def test_submit_unknown_outcome_is_journaled_before_enter_and_blocks_replay(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / 'seen.json'
+            node, storage, enters = object(), [''], []
+            def write(n, text, expected): storage[0] = text; return True
+            def submit(n, text, message):
+                self.assertIn(message['id'], json.loads(state.read_text()))
+                enters.append(text)
+                raise TimeoutError()
+            sync = bridge.DraftSync(lambda: [node], lambda n: True, lambda n: storage[0], write,
+                                    lambda n: 'chat', submit=submit)
+            receiver = bridge.Receiver(KEY, state, None, sync)
+            sync.apply(sync_message('hello'))
+            message = dict(sync_message('hello', 2, 'hello'), kind='submit')
+            raw = bridge.packet(KEY, message, bridge.CHAT_PREFIX)
+            result = receiver.receive(raw)
+            outer = json.loads(base64.b64decode(result[len(bridge.CHAT_PREFIX):]))
+            self.assertEqual(json.loads(base64.b64decode(outer['body']))['status'], 'uncertain')
+            self.assertIsNone(receiver.receive(raw))
+            self.assertIsNone(bridge.Receiver(KEY, state, None, sync).receive(raw))
+            self.assertEqual(enters, ['hello'])
+            self.assertNotIn('hello', state.read_text())
+
+    def test_submit_key_requires_matching_native_window_focus_and_text(self):
+        class Node:
+            def get_application(self): return self
+            def get_process_id(self): return 42
+        calls = []
+        def run(command):
+            calls.append(command)
+            return '123' if command[1] == 'getwindowfocus' else '42'
+        node = Node()
+        self.assertTrue(bridge.submit_prompt(node, 'hello', run, lambda n: 'hello', lambda n: True))
+        self.assertEqual([c for c in calls if c[1] == 'key'],
+                         [['xdotool', 'key', '--clearmodifiers', 'Return']])
+        calls.clear()
+        for expected, focused in (('older', True), ('hello', False), ('', True)):
+            self.assertFalse(bridge.submit_prompt(node, expected, run, lambda n: 'hello', lambda n: focused))
+        self.assertFalse(any(c[1] == 'key' for c in calls))
+
+    def test_chat_protocol_is_separate_and_rejects_empty_submit_or_bad_watch(self):
+        message = dict(sync_message('hello', 2, 'hello'), kind='submit')
+        self.assertEqual(bridge.unpack(KEY, bridge.packet(KEY, message, bridge.CHAT_PREFIX)), message)
+        poll = {'kind': 'poll', 'id': IDENTIFIER, 'at': int(time.time()),
+                'stream': 'b' * 32, 'turn': 'c' * 32}
+        self.assertEqual(bridge.unpack(KEY, bridge.packet(KEY, poll, bridge.CHAT_PREFIX)), poll)
+        for value, prefix in ((dict(message, text=''), bridge.CHAT_PREFIX),
+                              (message, bridge.SYNC_PREFIX), (poll, bridge.SYNC_PREFIX),
+                              (dict(poll, turn='../file'), bridge.CHAT_PREFIX)):
+            with self.assertRaises(ValueError):
+                bridge.unpack(KEY, bridge.packet(KEY, value, prefix))
+
+    def test_reply_watch_binds_only_new_submitted_turn_and_handles_progress(self):
+        node, panel, old, anchor, reply = (object() for _ in range(5))
+        def turn(n, author, text, complete=False):
+            return dict(node=n, author=author, text=text, complete=complete, truncated=False)
+        view = {'panel': panel, 'busy': False, 'turns': [turn(old, 'user', 'hello')]}
+        watch = bridge.ReplyWatch(lambda: [node], lambda n: view, lambda *a: True)
+        message = dict(sync_message('hello', 2, 'hello'), kind='submit')
+        self.assertTrue(watch.dispatch(node, 'hello', message))
+        poll = dict(stream=message['stream'], turn=message['id'])
+        self.assertEqual(watch.poll(poll), {'status': 'waiting', 'accepted': False})
+        view['turns'].append(turn(anchor, 'user', 'hello'))
+        self.assertEqual(watch.poll(poll), {'status': 'waiting', 'accepted': True})
+        view['turns'].append(turn(reply, 'claude', '中文\npartial'))
+        self.assertEqual(watch.poll(poll)['status'], 'streaming')
+        view['turns'][-1]['text'] = '中文\ncomplete'
+        view['turns'][-1]['complete'] = True
+        result = watch.poll(poll)
+        self.assertEqual(result['status'], 'complete')
+        self.assertEqual(result['text'], '中文\ncomplete')
+        self.assertEqual(watch.poll(dict(poll, turn='bad')), {'status': 'not_ready'})
+        view['panel'] = object()
+        self.assertEqual(watch.poll(poll), {'status': 'changed'})
+
+    def test_busy_or_later_user_turn_is_never_treated_as_our_reply(self):
+        node, panel, anchor = object(), object(), object()
+        view = {'panel': panel, 'busy': True, 'turns': []}
+        submits = []
+        watch = bridge.ReplyWatch(lambda: [node], lambda n: view, lambda *a: submits.append(a) or True)
+        message = dict(sync_message('hello', 2, 'hello'), kind='submit')
+        self.assertFalse(watch.dispatch(node, 'hello', message))
+        self.assertEqual(submits, [])
+        view['busy'] = False
+        watch.dispatch(node, 'hello', message)
+        view['turns'] = [dict(node=anchor, author='user', text='hello'),
+                         dict(node=object(), author='user', text='another conversation turn')]
+        self.assertEqual(watch.poll(dict(stream=message['stream'], turn=message['id'])), {'status': 'changed'})
+
+    def test_message_body_omits_controls_summaries_and_bounds_large_output(self):
+        class Node:
+            def __init__(self, role, text='', children=(), classes=''):
+                self.role, self.text, self.children, self.classes = role, text, children, classes
+            def get_attributes(self): return {'class': self.classes}
+            def get_role_name(self): return self.role
+            def get_text_iface(self): return self
+            def get_text(self, start, end): return self.text
+            def get_child_count(self): return len(self.children)
+            def get_child_at_index(self, i): return self.children[i]
+        root = Node('article', children=[Node('heading', 'Claude said: duplicate', classes='sr-only'),
+                    Node('paragraph', '中文\nreply'), Node('tool bar', children=[Node('static', 'Copy')])])
+        self.assertEqual(bridge.message_body(root), ('中文\nreply', False))
+        text, truncated = bridge.message_body(Node('paragraph', 'x' * (bridge.MAX_REPLY + 1)))
+        self.assertEqual(len(text), bridge.MAX_REPLY)
+        self.assertTrue(truncated)
+
+
 class BridgeTests(unittest.TestCase):
     def test_unicode_multiline_authenticated_roundtrip_and_rejections(self):
         self.assertEqual(bridge.unpack(KEY, request())['text'], '中文输入\nSecond line 😀')
@@ -375,6 +501,37 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(bridge.unpack(KEY, lines[0])['text'], '')
         self.assertEqual(lines[1:], ['synced', 'wait', 'send', 'wait', 'wait', 'send', 'wait', 'wait',
                                    'False', 'False', 'False', 'True'])
+
+    @unittest.skipUnless(os.name == 'nt' and shutil.which('powershell.exe'), 'Windows PowerShell protocol')
+    def test_powershell_explicit_enter_waits_for_latest_sync_and_parses_reply(self):
+        script = Path(__file__).with_name('claude-input.ps1')
+        ack = bridge.packet(KEY, {'kind': 'chat_result', 'id': IDENTIFIER,
+                                 'at': int(time.time()), 'status': 'complete', 'accepted': True,
+                                 'text': 'reply', 'truncated': False}, bridge.CHAT_PREFIX)
+        code = (". '" + str(script).replace("'", "''") + "' -FunctionsOnly\n"
+                "$key=[byte[]](0..31)\n"
+                "New-BridgePacket $key ('a'*32) 'latest' ('b'*32) 2 (Get-DraftHash 'latest') 'submit'\n"
+                "New-BridgePacket $key ('c'*32) '' ('b'*32) 0 '' 'poll' ('a'*32)\n"
+                "(Read-ChatResult $key ('a'*32) '" + ack + "').text\n"
+                "Read-ChatResult $key ('b'*32) '" + ack + "'\n"
+                "$now=[DateTime]::UtcNow\n"
+                "$s=@{enabled=$true;paused=$false;composing=$false;pending=$null;confirmed='older';changed=$now;sendWanted=$true}\n"
+                "Get-SyncDecision $s 'latest' $now\n"
+                "$s.confirmed='latest'\n"
+                "Get-SyncDecision $s 'latest' $now\n"
+                "$s.pending=@{kind='sync'}\n"
+                "Get-SyncDecision $s 'latest' $now\n"
+                "Get-EnterAction $false $false $false\n"
+                "Get-EnterAction $true $false $false\n"
+                "Get-EnterAction $false $true $false\n"
+                "Get-EnterAction $false $false $true\n")
+        result = subprocess.run(['powershell.exe', '-NoProfile', '-EncodedCommand',
+                                 base64.b64encode(code.encode('utf-16-le')).decode()],
+                                capture_output=True, text=True, timeout=20, check=True)
+        lines = result.stdout.strip().splitlines()
+        self.assertEqual(bridge.unpack(KEY, lines[0])['kind'], 'submit')
+        self.assertEqual(bridge.unpack(KEY, lines[1])['kind'], 'poll')
+        self.assertEqual(lines[2:], ['reply', 'send', 'submit', 'wait', 'submit', 'newline', 'ime', 'ignore'])
 
 
 if __name__ == '__main__':

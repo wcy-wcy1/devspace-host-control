@@ -85,3 +85,30 @@ the task's delivery report; building/testing alone does not establish those.
   from the paired Windows device, and added on-failure restart to the existing
   service drop-in. Installer templates carry the same recovery setting.
   No firewall, ACL, folder permission, GPU or public listener was broadened.
+
+## Explicit send and local reply display — 2026-11-17
+
+- All 97 skill Python tests passed on Windows. The 30 bridge tests also passed
+  on CentOS, with three Windows-only tests skipped. New coverage includes v3
+  PowerShell/Python protocol compatibility, exact-revision explicit submission,
+  journal-before-Enter ordering, no replay after unknown outcomes, IME/Shift/
+  repeated-Enter gating, latest-sync-before-submit, scoped reply ownership,
+  navigation/subsequent-turn refusal, text extraction and truncation.
+- A WPF event harness raised the actual panel's PreviewKeyDown Enter event,
+  used production RDP clipboard transport and the deployed CentOS receiver,
+  and received the real Claude fixture reply. It observed exactly one submit
+  request, handled Enter, and local input clearing after acceptance. The short
+  turn completed in 15.5 seconds; this is one observation, not a latency bound.
+- A separate WPF callback harness verified cancelling a queued submit while
+  a sync was pending preserves an editable local draft, reconnect restores the
+  panel state, and copying a reply stops polling and unlocks input. It did not
+  send another model request. The actual panel XAML was rendered and inspected
+  for the README preview; that image is a UI preview, not a response screenshot.
+- The receiver was updated with pairing preserved and without restarting Claude.
+  Existing conversation replies were excluded from the watched new turn. No
+  additional network port, expanded Windows MCP capability, folder grant or
+  GPU setting change was needed.
+- Actual OS IME composition and native Shift+Enter key entry, long live replies,
+  other Claude versions and Ubuntu desktop acceptance remain unverified.
+  Reply snapshots contain plain text only, up to 24000 characters; they do not
+  establish complete Markdown/image/history mirroring or API streaming.
