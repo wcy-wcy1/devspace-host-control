@@ -14,6 +14,7 @@ import time
 import http.client
 import ipaddress
 import ssl
+import secrets
 from urllib.parse import urlsplit
 
 PREFIX = 'HC-DRAFT/1 '
@@ -22,6 +23,8 @@ CHAT_PREFIX = 'HC-DRAFT/3 '
 MAX_TEXT = 4000
 MAX_REPLY = 24000
 MAX_PACKET = 262144
+MAX_IMAGE_BYTES = 80000
+MAX_IMAGES = 4
 TTL = 15
 PROMPT_HINTS = ('reply to claude', 'write your prompt', 'message claude',
                 'how can i help', '回复 claude', '向 claude', '发送消息', '你想聊', '给 claude',
@@ -54,12 +57,14 @@ def unpack(key, raw, now=None):
         raise ValueError('Invalid message ID')
     sync = prefix in (SYNC_PREFIX, CHAT_PREFIX)
     kind = value.get('kind')
-    if prefix == CHAT_PREFIX and kind in ('poll', 'recover'):
+    if prefix == CHAT_PREFIX and kind in ('poll', 'recover', 'image'):
         if not re.fullmatch('[a-f0-9]{32}', value.get('stream', '')):
             raise ValueError('Invalid reply watch')
-        if kind == 'poll':
+        if kind in ('poll', 'image'):
             if not re.fullmatch('[a-f0-9]{32}', value.get('turn', '')):
                 raise ValueError('Invalid reply watch')
+            if kind == 'image' and not re.fullmatch('[a-f0-9]{32}', value.get('image', '')):
+                raise ValueError('Invalid image identifier')
             return value
     elif kind != ('submit' if prefix == CHAT_PREFIX else 'sync' if sync else 'draft'):
         raise ValueError('Not a draft')
@@ -501,6 +506,99 @@ def message_body(root):
     return text[:MAX_REPLY], len(text) > MAX_REPLY
 
 
+def message_images(root):
+    """Find content images, excluding controls/icons. No URL/file reads or actions."""
+    found, stack, count = [], [root], 0
+    while stack:
+        node = stack.pop(); count += 1
+        if count > 5000:
+            raise ValueError('Message is too large')
+        role = node.get_role_name()
+        if role in ('tool bar', 'push button', 'toggle button', 'entry'):
+            continue
+        if role == 'image':
+            rect = node.get_component_iface().get_extents(0)
+            if rect.width >= 80 and rect.height >= 80:
+                found.append(node)
+                if len(found) == MAX_IMAGES:
+                    break
+            continue
+        stack.extend(node.get_child_at_index(i) for i in reversed(range(min(node.get_child_count(), 600)))
+                     if node.get_child_at_index(i) is not None)
+    return found
+
+
+def contained_rect(inner, outer):
+    x, y, w, h = inner
+    ox, oy, ow, oh = outer
+    return (80 <= w <= 4096 and 80 <= h <= 4096 and w * h <= 8000000
+            and x >= ox and y >= oy and x + w <= ox + ow and y + h <= oy + oh)
+
+
+def image_preview(node):
+    """Raster preview of this visible image in the active Claude window, not its source."""
+    import gi
+    gi.require_version('Gdk', '3.0')
+    gi.require_version('GdkX11', '3.0')
+    from gi.repository import Atspi, Gdk, GdkX11, GdkPixbuf
+    pid = str(node.get_application().get_process_id())
+    window = desktop_command(['xdotool', 'getactivewindow'])
+    frame = node
+    for _ in range(60):
+        if frame is None or frame.get_role_name() == 'frame':
+            break
+        frame = frame.get_parent()
+    if frame is None or frame.get_role_name() != 'frame' or not frame.get_name():
+        raise ValueError('Image has no identifiable Claude frame')
+    windows = desktop_command(['xdotool', 'search', '--all', '--pid', pid,
+                               '--name', '^' + re.escape(frame.get_name()) + '$']).splitlines()
+    if windows != [window]:
+        raise ValueError('Image is not in the active Claude document frame')
+    def current():
+        return (window.isdigit() and claude_pid(int(pid))
+                and desktop_command(['xdotool', 'getactivewindow']) == window
+                and desktop_command(['xdotool', 'getwindowpid', window]) == pid)
+    if not current() or not node.get_state_set().contains(Atspi.StateType.SHOWING):
+        raise ValueError('Image is not in the active Claude window')
+    rect = node.get_component_iface().get_extents(Atspi.CoordType.SCREEN)
+    bounds = (rect.x, rect.y, rect.width, rect.height)
+    display = Gdk.Display.get_default()
+    native = GdkX11.X11Window.foreign_new_for_display(display, int(window))
+    if native is None or not native.is_visible():
+        raise ValueError('Claude window is not visible')
+    origin = native.get_origin()
+    wx, wy = origin[-2:]
+    if not contained_rect(bounds, (wx, wy, native.get_width(), native.get_height())):
+        raise ValueError('Show the complete image in Claude first')
+    # The image may sit inside a clipped iframe/scroll viewport. Refuse partial
+    # previews rather than exporting adjacent messages or unrelated desktop areas.
+    ancestor = node.get_parent()
+    for _ in range(50):
+        if ancestor is None or ancestor.get_role_name() in ('frame', 'application'):
+            break
+        if ancestor.get_role_name() in ('internal frame', 'document web', 'panel', 'article'):
+            clip = ancestor.get_component_iface().get_extents(Atspi.CoordType.SCREEN)
+            if not contained_rect(bounds, (clip.x, clip.y, clip.width, clip.height)):
+                raise ValueError('Image is clipped')
+        ancestor = ancestor.get_parent()
+    # Read only the verified native drawable's image rectangle, never the root
+    # desktop. Focus/geometry are checked again before publishing these pixels.
+    pixbuf = Gdk.pixbuf_get_from_window(native, rect.x - wx, rect.y - wy, rect.width, rect.height)
+    after = node.get_component_iface().get_extents(Atspi.CoordType.SCREEN)
+    if pixbuf is None or not current() or bounds != (after.x, after.y, after.width, after.height):
+        raise ValueError('Image changed during capture')
+    scale = min(1, 1024 / max(rect.width, rect.height))
+    for _ in range(10):
+        width, height = max(1, int(rect.width * scale)), max(1, int(rect.height * scale))
+        preview = pixbuf.scale_simple(width, height, GdkPixbuf.InterpType.BILINEAR)
+        ok, data = preview.save_to_bufferv('png', ['compression'], ['9'])
+        if ok and len(data) <= MAX_IMAGE_BYTES:
+            return {'mime': 'image/png', 'data': base64.b64encode(data).decode('ascii'),
+                    'width': width, 'height': height, 'preview': True}
+        scale *= .75
+    raise ValueError('Image preview exceeds the transfer limit')
+
+
 def conversation_view(prompt):
     app = prompt.get_application()
     if not claude_pid(app.get_process_id()):
@@ -541,16 +639,19 @@ def conversation_view(prompt):
             n.get_role_name() == 'push button' and n.get_name() in ('复制', 'Copy', 'Copy response')
             for n in walk_ui(article))
         turns.append({'node': article, 'author': author, 'text': text,
-                      'truncated': truncated, 'complete': complete})
+                      'truncated': truncated, 'complete': complete,
+                      'images': message_images(article) if author == 'claude' and complete else []})
     return {'panel': panels[0], 'turns': turns, 'busy': busy}
 
 
 class ReplyWatch:
-    def __init__(self, find, read_view=conversation_view, submit=submit_prompt):
+    def __init__(self, find, read_view=conversation_view, submit=submit_prompt, capture=image_preview):
         self.find, self.read_view, self.submit = find, read_view, submit
+        self.capture, self.images = capture, {}
         self.watch = None
 
     def dispatch(self, node, text, message):
+        self.images = {}
         before = self.read_view(node)
         if before['busy']:
             return False
@@ -567,6 +668,7 @@ class ReplyWatch:
         users = [t for t in view['turns'] if t['author'] == 'user']
         if not users or users[-1]['text'] != message['text']:
             return {'status': 'conflict'}
+        self.images = {}
         self.watch = {'stream': message['stream'], 'turn': message['id'],
                       'text': message['text'], 'before': [],
                       'anchor': users[-1]['node'], 'panel': view['panel']}
@@ -603,9 +705,35 @@ class ReplyWatch:
         if not replies:
             return {'status': 'waiting', 'accepted': True}
         text = '\n\n'.join(t['text'] for t in replies)
-        return {'status': 'complete' if replies[-1]['complete'] else 'streaming',
-                'accepted': True, 'text': text[:MAX_REPLY],
-                'truncated': len(text) > MAX_REPLY or any(t['truncated'] for t in replies)}
+        result = {'status': 'complete' if replies[-1]['complete'] else 'streaming',
+                  'accepted': True, 'text': text[:MAX_REPLY],
+                  'truncated': len(text) > MAX_REPLY or any(t['truncated'] for t in replies)}
+        current_images = [n for t in replies for n in t.get('images', [])][:MAX_IMAGES]
+        old = self.images
+        self.images = {}
+        for node in current_images:
+            token = next((key for key, value in old.items() if value == node), secrets.token_hex(16))
+            self.images[token] = node
+        if self.images:
+            result['images'] = [{'id': token, 'label': (node.get_name() or 'Claude 图片')[:120]}
+                                for token, node in self.images.items()]
+        return result
+
+    def image(self, message):
+        # Revalidate the bound user turn and current assistant subtree for every
+        # read; a token is never a URL, filesystem path or general screenshot tool.
+        result = self.poll(message)
+        if result.get('status') != 'complete' or message['image'] not in self.images:
+            return {'status': 'image_unavailable'}
+        try:
+            node = self.images[message['image']]
+            preview = self.capture(node)
+            # Capture can race navigation. Re-observe and discard on any change.
+            if self.poll(message).get('status') != 'complete' or self.images.get(message['image']) != node:
+                return {'status': 'image_unavailable'}
+            return {'status': 'image_ready', 'image': dict(preview, id=message['image'])}
+        except Exception:
+            return {'status': 'image_unavailable'}
 
 
 class Receiver:
@@ -636,12 +764,14 @@ class Receiver:
                 result = self.replies.poll(message) if self.replies else {'status': 'not_ready'}
             elif message['kind'] == 'recover':
                 result = self.replies.recover(message) if self.replies else {'status': 'not_ready'}
+            elif message['kind'] == 'image':
+                result = self.replies.image(message) if self.replies else {'status': 'image_unavailable'}
             else:
                 status = (self.sync.apply(message) if self.sync else 'not_ready') if message['kind'] in ('sync', 'submit') else self.fill(message['text'])
                 result = {'status': status}
         except Exception:
             result = {'status': 'uncertain'}
-        if message['kind'] in ('submit', 'poll', 'recover'):
+        if message['kind'] in ('submit', 'poll', 'recover', 'image'):
             return packet(self.key, dict(result, kind='chat_result', id=identifier,
                                          at=int(time.time())), CHAT_PREFIX)
         sync = message['kind'] == 'sync'

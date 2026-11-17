@@ -6,7 +6,7 @@ function Get-DraftHash([string]$Text) {
     finally { $sha.Dispose() }
 }
 function Normalize-Draft([string]$Text) { return $Text.Replace("`r`n","`n").Replace("`r","`n") }
-function New-BridgePacket([byte[]]$Key, [string]$Id, [string]$Text, [string]$Stream='', [int]$Sequence=0, [string]$Base='', [ValidateSet('sync','submit','poll','recover')][string]$Kind='sync', [string]$Turn='') {
+function New-BridgePacket([byte[]]$Key, [string]$Id, [string]$Text, [string]$Stream='', [int]$Sequence=0, [string]$Base='', [ValidateSet('sync','submit','poll','recover','image')][string]$Kind='sync', [string]$Turn='', [string]$ImageId='') {
     $Text=Normalize-Draft $Text
     $sync=$Stream -ne ''
     if ((-not $sync -and [string]::IsNullOrWhiteSpace($Text)) -or ([regex]::Matches($Text,'[\uD800-\uDBFF][\uDC00-\uDFFF]|[\s\S]')).Count -gt 4000 -or $Text -match '[\x00-\x08\x0B\x0C\x0E-\x1F]') { throw '请输入有效文字（最多 4000 个字符）。' }
@@ -22,9 +22,13 @@ function New-BridgePacket([byte[]]$Key, [string]$Id, [string]$Text, [string]$Str
         } elseif ($Kind -eq 'recover') {
             if ([string]::IsNullOrWhiteSpace($Text)) { throw '请保留上一条发送的文字，用于核对回复。' }
             $p=@{kind='recover';id=$Id;at=$p.at;stream=$Stream;text=$Text}; $prefix='HC-DRAFT/3 '
-        } elseif ($Kind -eq 'poll') {
+        } elseif ($Kind -in @('poll','image')) {
             if ($Turn -cnotmatch '^[a-f0-9]{32}$') { throw '回复标识无效。' }
             $p=@{kind='poll';id=$Id;at=$p.at;stream=$Stream;turn=$Turn}; $prefix='HC-DRAFT/3 '
+            if($Kind -eq 'image'){
+                if($ImageId -cnotmatch '^[a-f0-9]{32}$'){throw '图片标识无效。'}
+                $p.kind='image';$p.image=$ImageId
+            }
         }
     }
     $body=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($p | ConvertTo-Json -Compress)))
@@ -77,13 +81,41 @@ function Read-ChatResult([byte[]]$Key, [string]$Id, [string]$Raw) {
         if ($mac -cne $outer.mac) { return $null }
         $p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($outer.body)) | ConvertFrom-Json
         $age=[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()-[long]$p.at
-        if ($p.kind -ne 'chat_result' -or $p.id -cne $Id -or $age -lt -10 -or $age -gt 20 -or $p.status -notin @('submitted','waiting','streaming','complete','changed','conflict','not_ready','uncertain')) { return $null }
+        if ($p.kind -ne 'chat_result' -or $p.id -cne $Id -or $age -lt -10 -or $age -gt 20 -or $p.status -notin @('submitted','waiting','streaming','complete','changed','conflict','not_ready','uncertain','image_ready','image_unavailable')) { return $null }
         if ($null -ne $p.text -and ($p.text -isnot [string] -or $p.text.Length -gt 48000)) { return $null }
         if ($null -ne $p.accepted -and $p.accepted -isnot [bool]) { return $null }
         if ($null -ne $p.truncated -and $p.truncated -isnot [bool]) { return $null }
         if ($p.status -in @('streaming','complete') -and ($p.accepted -ne $true -or $p.text -isnot [string])) { return $null }
+        if($null -ne $p.images){
+            if($p.images -isnot [array] -or $p.images.Count -gt 4){return $null}
+            $seen=@{}
+            foreach($item in $p.images){
+                if($item.id -isnot [string] -or $item.id -cnotmatch '^[a-f0-9]{32}$' -or $seen.ContainsKey($item.id) -or $item.label -isnot [string] -or $item.label.Length -gt 240){return $null}
+                $seen[$item.id]=$true
+            }
+        }
+        if($p.status -eq 'image_ready' -and -not (Test-ImagePreview $p.image)){return $null}
         return $p
     } catch { return $null }
+}
+function Test-ImagePreview($Image) {
+    try{
+        if($Image.id -isnot [string] -or $Image.id -cnotmatch '^[a-f0-9]{32}$' -or $Image.mime -cne 'image/png' -or $Image.preview -isnot [bool] -or $Image.preview -ne $true -or $Image.data -isnot [string] -or $Image.data.Length -gt 106668){return $false}
+        $bytes=[Convert]::FromBase64String($Image.data)
+        if($bytes.Length -lt 33 -or $bytes.Length -gt 80000 -or [BitConverter]::ToString($bytes,0,8) -cne '89-50-4E-47-0D-0A-1A-0A' -or [BitConverter]::ToString($bytes,8,8) -cne '00-00-00-0D-49-48-44-52'){return $false}
+        $width=[long]$bytes[16]*16777216+[long]$bytes[17]*65536+[long]$bytes[18]*256+$bytes[19]
+        $height=[long]$bytes[20]*16777216+[long]$bytes[21]*65536+[long]$bytes[22]*256+$bytes[23]
+        return ($width -ge 1 -and $height -ge 1 -and $width -le 1024 -and $height -le 1024 -and $Image.width -is [int] -and $Image.height -is [int] -and $Image.width -eq $width -and $Image.height -eq $height)
+    }catch{return $false}
+}
+function ConvertTo-PreviewBitmap($Image) {
+    if(-not (Test-ImagePreview $Image)){throw '图片预览格式或尺寸无效。'}
+    $memory=[IO.MemoryStream]::new([Convert]::FromBase64String($Image.data))
+    try{
+        $bitmap=[Windows.Media.Imaging.BitmapFrame]::Create($memory,[Windows.Media.Imaging.BitmapCreateOptions]::None,[Windows.Media.Imaging.BitmapCacheOption]::OnLoad)
+        if($bitmap.PixelWidth -ne $Image.width -or $bitmap.PixelHeight -ne $Image.height){throw '图片尺寸不匹配。'}
+        $bitmap.Freeze();return $bitmap
+    }finally{$memory.Dispose()}
 }
 function Get-EnterAction([bool]$Shift, [bool]$Composing, [bool]$Repeat) {
     if ($Composing) { return 'ime' }
@@ -135,7 +167,14 @@ function New-RelayTask($Body){
 }
 function Invoke-RelayLocal($Body){
     $response=(New-RelayTask $Body).GetAwaiter().GetResult()
-    try{if(-not $response.IsSuccessStatusCode){throw '本机代理未就绪、输入会话过期或已有其它面板连接；请重新连接。'}}finally{if($response.RequestMessage){$response.RequestMessage.Dispose()};$response.Dispose()}
+    try{
+        if(-not $response.IsSuccessStatusCode){
+            if([int]$response.StatusCode -eq 409 -and $response.Content.ReadAsStringAsync().GetAwaiter().GetResult().Contains('another local panel owns this transport')){
+                $failure=[InvalidOperationException]::new('输入通道被其它面板占用。');$failure.Data['relay_busy']=$true;throw $failure
+            }
+            throw '本机代理未就绪或输入会话过期；请重新连接。'
+        }
+    }finally{if($response.RequestMessage){$response.RequestMessage.Dispose()};$response.Dispose()}
 }
 [xml]$xaml=@'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="Claude 本地对话" Width="840" Height="840" MinWidth="660" MinHeight="680" Background="#F5F6F8" FontFamily="Segoe UI Variable, Segoe UI, Microsoft YaHei UI" WindowStartupLocation="CenterScreen" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
@@ -198,7 +237,11 @@ function Invoke-RelayLocal($Body){
         <StackPanel VerticalAlignment="Center"><TextBlock Text="Claude 的回复" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource Ink}"/><TextBlock Name="ReplyState" Text="发送消息后，回复会显示在这里" FontSize="12" Foreground="{StaticResource Secondary}" Margin="0,5,8,0" TextWrapping="Wrap"/></StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"><Button Name="RecoverReply" Content="取回回复" ToolTip="仅读取远程最后一条匹配消息的回复，不重新发送。" Margin="0,0,7,0"/><Button Name="CopyReply" Content="复制"/></StackPanel>
       </Grid>
-      <TextBox Name="Reply" Grid.Row="1" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Claude 最新回复"/>
+      <ScrollViewer Name="ReplyScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
+        <TextBox Name="Reply" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Disabled" AutomationProperties.Name="Claude 最新回复"/>
+        <StackPanel Name="ReplyImages" Margin="0,12,0,0"/>
+        <TextBlock Name="ImageState" FontSize="12" Foreground="{StaticResource Secondary}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+      </StackPanel></ScrollViewer>
     </Grid>
   </Border>
   <Border Grid.Row="2" Style="{StaticResource Composer}" Margin="0,18,0,0">
@@ -224,8 +267,36 @@ $window=[Windows.Markup.XamlReader]::Load($reader)
 $draft=$window.FindName('Draft'); $live=$window.FindName('Live'); $resume=$window.FindName('Resume'); $status=$window.FindName('Status')
 $send=$window.FindName('Send'); $reply=$window.FindName('Reply'); $replyState=$window.FindName('ReplyState'); $copyReply=$window.FindName('CopyReply')
 $recoverReply=$window.FindName('RecoverReply'); $connectionState=$window.FindName('ConnectionState')
+$replyImages=$window.FindName('ReplyImages');$imageState=$window.FindName('ImageState')
 $script:sync=@{stream=[Guid]::NewGuid().ToString('N');seq=0;confirmed='';pending=$null;clipHashes=@();held=$false;backup=$null;expected='';enabled=$true;paused=$false;composing=$false;sendWanted=$false;stopRequested=$false;awaiting=$false;replyActive=$false;replyStream='';turn='';pollAt=[DateTime]::UtcNow;changed=[DateTime]::UtcNow}
 $script:sync.inputDelayMs=if($script:relay){0}else{600}
+$script:sync.imageQueue=@();$script:sync.imageResults=[ordered]@{};$script:sync.imageAllowed=$false
+function Reset-ReplyImages {
+    $script:sync.imageQueue=@();$script:sync.imageResults=[ordered]@{};$script:sync.imageAllowed=$false
+    $replyImages.Children.Clear();$imageState.Text=''
+}
+function Show-ReplyImages {
+    $replyImages.Children.Clear()
+    foreach($entry in $script:sync.imageResults.Values){
+        $card=[Windows.Controls.Border]::new();$card.CornerRadius=[Windows.CornerRadius]::new(14);$card.Background=[Windows.Media.BrushConverter]::new().ConvertFromString('#F5F6F8');$card.Padding=[Windows.Thickness]::new(12);$card.Margin=[Windows.Thickness]::new(0,0,0,12)
+        $stack=[Windows.Controls.StackPanel]::new();$card.Child=$stack
+        $picture=[Windows.Controls.Image]::new();$picture.Source=$entry.bitmap;$picture.Stretch=[Windows.Media.Stretch]::Uniform;$picture.MaxHeight=400;$picture.HorizontalAlignment='Left'
+        [void]$stack.Children.Add($picture)
+        $caption=[Windows.Controls.TextBlock]::new();$caption.Text=$entry.label+' · 预览截图';$caption.FontSize=12;$caption.Foreground=[Windows.Media.Brushes]::DimGray;$caption.Margin=[Windows.Thickness]::new(0,10,0,8);$caption.TextWrapping='Wrap';[void]$stack.Children.Add($caption)
+        $save=[Windows.Controls.Button]::new();$save.Content='保存预览';$save.HorizontalAlignment='Left';$save.Tag=$entry.bitmap
+        $save.Add_Click({param($sender,$event)
+            $dialog=[Microsoft.Win32.SaveFileDialog]::new();$dialog.Filter='PNG 图片|*.png';$dialog.DefaultExt='.png';$dialog.FileName='claude-preview.png';$dialog.AddExtension=$true
+            if($dialog.ShowDialog($window) -eq $true){
+                try{
+                    $encoder=[Windows.Media.Imaging.PngBitmapEncoder]::new();$encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($sender.Tag))
+                    $file=[IO.File]::Open($dialog.FileName,[IO.FileMode]::Create,[IO.FileAccess]::Write)
+                    try{$encoder.Save($file)}finally{$file.Dispose()}
+                    $status.Text='图片预览已保存为 PNG；原始文件请在 Claude 中下载。'
+                }catch{$status.Text='保存失败：请检查目标文件夹是否可写。'}
+            }
+        });[void]$stack.Children.Add($save);[void]$replyImages.Children.Add($card)
+    }
+}
 function Restore-BridgeClipboard([string]$Expected) {
     try {
         if ([System.Windows.Forms.Clipboard]::ContainsText() -and [System.Windows.Forms.Clipboard]::GetText() -ceq $Expected) {
@@ -240,17 +311,19 @@ function Stop-DraftSync([string]$Message) {
     if($script:sync.replyActive -or $script:sync.awaiting){$replyState.Text='回复更新已暂停 · 可点击「取回回复」'}
     $script:sync.paused=$true
     $script:sync.recoverOnly=$false
+    $script:sync.imageAllowed=$false;$script:sync.imageQueue=@()
     $script:sync.sendWanted=$false; $script:sync.awaiting=$false; $script:sync.replyActive=$false
     $draft.IsReadOnly=$false; $send.IsEnabled=$true
     $status.Text=$Message+' 本地文字已保留；处理远端草稿后点击「连接空对话」。'
 }
 function Start-DraftSync([string]$Kind='sync') {
     try {
-        $text=if($Kind -eq 'poll'){''}elseif($Kind -eq 'recover'){$script:sync.recoveryText}else{Normalize-Draft $draft.Text}
+        $text=if($Kind -in @('poll','image')){''}elseif($Kind -eq 'recover'){$script:sync.recoveryText}else{Normalize-Draft $draft.Text}
         $id=[Guid]::NewGuid().ToString('N')
         $sequence=$script:sync.seq+1
-        $stream=if($Kind -eq 'poll'){$script:sync.replyStream}else{$script:sync.stream}
-        $raw=New-BridgePacket $key $id $text $stream $sequence (Get-DraftHash $script:sync.confirmed) $Kind $script:sync.turn
+        $stream=if($Kind -in @('poll','image')){$script:sync.replyStream}else{$script:sync.stream}
+        $imageId=if($Kind -eq 'image'){$script:sync.imageQueue[0].id}else{''}
+        $raw=New-BridgePacket $key $id $text $stream $sequence (Get-DraftHash $script:sync.confirmed) $Kind $script:sync.turn $imageId
         if($script:relay){
             if(-not $script:relay.opened){Invoke-RelayLocal @{action='open'};$script:relay.opened=$true}
             $script:sync.pending=@{id=$id;raw=$raw;text=$text;kind=$Kind;stream=$stream;started=[DateTime]::UtcNow;readTask=$null}
@@ -282,7 +355,8 @@ function Start-DraftSync([string]$Kind='sync') {
         $transfer.SetText($raw)
         [System.Windows.Forms.Clipboard]::SetDataObject($transfer,$true,2,50)
         }
-        if($Kind -ne 'poll'){$script:sync.seq=$sequence}
+        if($Kind -eq 'image'){$script:sync.pending.image=$script:sync.imageQueue[0];$script:sync.imageQueue=@($script:sync.imageQueue|Select-Object -Skip 1)}
+        if($Kind -notin @('poll','image')){$script:sync.seq=$sequence}
         $resume.IsEnabled=$false
         $recoverReply.IsEnabled=$false
         if($Kind -eq 'recover'){$replyState.Text='正在核对并取回回复…';$status.Text='只读取对应回复，不会重新发送消息。'}
@@ -293,7 +367,8 @@ function Start-DraftSync([string]$Kind='sync') {
         $wasDispatched=$null -ne $script:sync.pending
         $script:sync.pending=$null; $resume.IsEnabled=$true; $recoverReply.IsEnabled=$true
         if($script:relay -and -not $wasDispatched){
-            Stop-DraftSync '本机代理未连接。请先运行 Start-Claude.cmd，再点击「连接空对话」；本次没有提交消息。'
+            if($_.Exception.Data['relay_busy']){Stop-DraftSync '输入通道仍被其它或旧面板占用。请关闭其它面板；若全部关闭仍提示，请重启本机 Windows 代理后重新连接。本次没有提交消息。'}
+            else{Stop-DraftSync '本机代理未连接。请先运行 Start-Claude.cmd，再点击「连接空对话」；本次没有提交消息。'}
         }elseif($wasDispatched){
             Stop-DraftSync '请求结果未知，请先检查远端草稿或消息；不会自动重发。'
         }else{Stop-DraftSync ('未开始同步：'+$_.Exception.Message)}
@@ -337,11 +412,21 @@ $timer.Add_Tick({
                     Stop-DraftSync '已停止发送确认与回复更新；已触发的发送仍可能完成，请先在远端核实。'
                     return
                 }
-                if($pending.kind -eq 'submit' -and $answer -in @('submitted','uncertain')){
+                if($pending.kind -eq 'image'){
+                    if($answer -eq 'image_ready' -and $chat.image.id -ceq $pending.image.id -and $script:sync.imageAllowed){
+                        try{
+                            $bitmap=ConvertTo-PreviewBitmap $chat.image
+                            $script:sync.imageResults[$pending.image.id]=@{bitmap=$bitmap;label=$pending.image.label}
+                            Show-ReplyImages
+                            $imageState.Text='图片为远端可见区域的预览截图，可保存为 PNG。'
+                        }catch{$imageState.Text='图片预览解码失败；文字回复不受影响。'}
+                    }else{$imageState.Text='图片暂不可见。请在远程 Claude 完整显示图片，再点「取回回复」。'}
+                } elseif($pending.kind -eq 'submit' -and $answer -in @('submitted','uncertain')){
                     $script:sync.sendWanted=$false; $script:sync.awaiting=$true
                     $script:sync.sentText=$pending.text; $script:sync.replyActive=$true
                     $script:sync.replyStream=$pending.stream; $script:sync.turn=$pending.id
                     $script:sync.watchStarted=[DateTime]::UtcNow; $script:sync.pollAt=[DateTime]::UtcNow
+                    Reset-ReplyImages
                     $reply.Text=''; $replyState.Text='等待 Claude 确认与回复…'
                     $status.Text='发送已触发一次，正在确认；不会自动重复发送。'
                 } elseif($pending.kind -in @('poll','recover') -and $answer -in @('waiting','streaming','complete')) {
@@ -361,6 +446,8 @@ $timer.Add_Tick({
                     if($chat.truncated -eq $true){$replyState.Text+='（显示前 24000 个字符）'}
                     if($answer -eq 'complete'){
                         $script:sync.replyActive=$false; $send.IsEnabled=$true
+                        $script:sync.imageQueue=@($chat.images|Where-Object {$null -ne $_});$script:sync.imageAllowed=$true
+                        if($script:sync.imageQueue.Count -gt 0){$imageState.Text='正在读取图片预览…'}
                         $status.Text=if($script:sync.recoverOnly){'回复已取回，没有重新发送。本地文字保留；发送新消息前先连接空草稿。'}else{'回复已显示在上方。Enter 发送下一条，Shift+Enter 换行。'}
                         $script:sync.recoverOnly=$false
                         if(-not $script:sync.enabled){Restore-BridgeClipboard $raw}
@@ -377,7 +464,8 @@ $timer.Add_Tick({
             } elseif (([DateTime]::UtcNow-$pending.started).TotalSeconds -ge 18) {
                 Restore-BridgeClipboard $pending.raw
                 $script:sync.pending=$null; $resume.IsEnabled=$true; $recoverReply.IsEnabled=$true
-                Stop-DraftSync '未收到确认；请检查远程连接与 Claude 草稿，同步不会自动重试。'
+                if($pending.kind -eq 'image'){$imageState.Text='图片读取超时。请检查远端图片后点击「取回回复」。'}
+                else{Stop-DraftSync '未收到确认；请检查远程连接与 Claude 草稿，同步不会自动重试。'}
             } elseif (-not $script:relay -and $raw -cne $pending.raw -and (Test-OtherClipboard $script:sync $raw)) {
                 $script:sync.held=$false; $script:sync.backup=$null
                 $script:sync.pending=$null; $resume.IsEnabled=$true; $recoverReply.IsEnabled=$true
@@ -399,6 +487,7 @@ $timer.Add_Tick({
             if(($script:sync.awaiting -and $elapsed -gt 40) -or $elapsed -gt 600){Stop-DraftSync '等待回复超时，请在远端确认结果，不会自动重发。'}
             else{Start-DraftSync 'poll'}
         }
+        elseif($null -eq $script:sync.pending -and $script:sync.imageAllowed -and $script:sync.imageQueue.Count -gt 0){Start-DraftSync 'image'}
     } catch {
         if($script:relay -and $null -ne $script:sync.pending){
             $script:sync.pending=$null;$resume.IsEnabled=$true;$recoverReply.IsEnabled=$true
@@ -426,6 +515,7 @@ $recoverReply.Add_Click({
     if([string]::IsNullOrWhiteSpace($text)){$status.Text='请在下方填入要核对的上一条消息，再点「取回回复」。不会发送这段文字。';return}
     $live.IsChecked=$false
     Stop-DraftSync '已暂停草稿同步，准备仅读取回复。'
+    Reset-ReplyImages
     $script:sync.recoveryText=$text; $script:sync.recoverOnly=$true
     $script:sync.stopRequested=$false; $script:sync.replyActive=$true
     $script:sync.watchStarted=[DateTime]::UtcNow
@@ -463,6 +553,7 @@ $draft.Add_LostKeyboardFocus({
     $script:sync.composing=$false; $script:sync.changed=[DateTime]::UtcNow
 })
 $live.Add_Unchecked({
+    $script:sync.imageAllowed=$false;$script:sync.imageQueue=@()
     $script:sync.enabled=$false
     $script:sync.stopRequested=$true
     if($script:sync.replyActive -or $script:sync.awaiting){$replyState.Text='回复更新已暂停 · 可点击「取回回复」'}
@@ -482,6 +573,7 @@ $live.Add_Checked({
 })
 $resume.Add_Click({
     if ($null -ne $script:sync.pending) { return }
+    $script:sync.imageAllowed=$false;$script:sync.imageQueue=@()
     if($script:relay -or (Test-Path -LiteralPath $relayPath)){
         try{$refreshedRelay=New-RelayConnection $relayPath -Required}
         catch{Stop-DraftSync '无法刷新本机代理连接，请先运行 Start-Claude.cmd，再重新连接。';return}

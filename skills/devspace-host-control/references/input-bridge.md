@@ -8,8 +8,9 @@ require acceptance. The README image renders the real XAML; it is a UI preview.
 
 Ordinary typing synchronizes an owned draft. Enter/Send submits once;
 Shift+Enter inserts a newline, and IME confirmation does not submit. Replies
-appear as bounded plain text in a separate read-only pane. This does not mirror
-all history, images or attachments, and is not a Claude API streaming client.
+appear as bounded plain text with optional raster image previews in a separate
+read-only pane. This does not mirror all history, original files or attachments,
+and is not a Claude API streaming client.
 Keep the RDP desktop connected and Claude available. Never disable its GPU or
 sandbox to make the panel work.
 
@@ -96,6 +97,15 @@ Restart only this helper on updates; do not restart Claude or RDP unnecessarily.
 4. The upper pane updates only that turn's plain-text response, up to 24000
    characters with a truncation notice. You may draft the next message while
    Claude replies; submission waits for the current reply to finish.
+   After completion, up to four identified content images (including SVGs in
+   inline frames) are automatically requested over separate signed packets.
+   These are **visible-region preview screenshots**, not original images or
+   SVG source downloads. Save a preview explicitly with **保存预览** (PNG).
+   Each is scaled to at most 1024 pixels per side and 80000 encoded PNG bytes.
+   Keep the image completely visible inside the active remote Claude window;
+   off-screen/clipped images show a hint. Show them, then use **取回回复** again.
+   Standalone artifact sidebars, arbitrary attachments and full history are
+   outside this image scope. Image failures do not discard the text reply.
 5. **取回回复** reads the current last user turn only if it exactly matches the
    panel's last sent text, or the locally entered previous-message text after
    restart. It does not fill a draft or press Enter. Recovery retains local text
@@ -113,6 +123,11 @@ Restart only this helper on updates; do not restart Claude or RDP unnecessarily.
    overwrite nonempty unowned text. Unchecking **同步输入**
    stops queued work and reply polling, but cannot cancel an already dispatched
    operation or Claude generation. Closing preserves drafts.
+   A separate "输入通道仍被其它或旧面板占用" hint means the agent is reachable,
+   but another lease still owns input. Close other panels first. If all are
+   closed and it persists, restart the visible Windows agent, then reconnect;
+   agent restart clears the stale input lease and leaves file access paused.
+   It does not require re-pairing or restarting Claude/RDP.
 
 Zero debounce does not mean zero end-to-end delay. The UI scheduler, network
 round trip and accessibility updates still take time. No unknown operation is
@@ -151,7 +166,18 @@ binds its conversation panel and reads only its following assistant response.
 Navigation, subsequent user turns and ambiguous metadata stop the watch. The
 recovery action instead binds the existing last matching user article read-only.
 Replies are never interpreted as XAML, HTML, commands or bridge instructions and
-are not persisted. After restart, handle any nonempty remote draft yourself.
+are not persisted automatically. Image requests accept only random in-memory
+IDs bound to that watched assistant subtree, never URLs or paths. Every image
+read revalidates the matched last user turn and assistant node before and after
+capture. Only the image rectangle in the PID-verified active Claude native
+drawable is read, with viewport/window bounds and focus checks; there is no
+root-desktop capture, automatic scrolling, file read or network image fetch.
+The local panel accepts bounded PNG only, validates dimensions before decoding,
+and reencodes user-saved PNGs. It does not load remote SVG/HTML into a browser.
+Capture is a snapshot of a shared desktop; concurrent focus/layout changes can
+still race it. Do not operate other remote windows during capture. Existing
+text-only RDP clipboard policy and files-only MCP grants remain unchanged.
+After restart, handle any nonempty remote draft yourself.
 
 ## Verification and limitations
 

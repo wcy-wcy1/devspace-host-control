@@ -182,3 +182,41 @@ the task's delivery report; building/testing alone does not establish those.
   newest coalesced draft confirmed at 2.99 s, and final clear at 4.09 s. No Claude
   message was submitted. Source packaging/integrity checks were rerun; Go
   production code and runtime binaries were unchanged in this fix.
+
+## Scoped image previews in the local panel — 2026-11-17
+
+- All 116 Python skill tests passed on Windows. New cases cover image content
+  versus toolbar icons, signed per-turn image IDs, navigation/removal refusal,
+  discard after capture races, bounded packets, PNG type/dimension checks,
+  corrupt-image decode rejection, and real WPF image cards/scroll viewports at
+  normal and minimum widths. The real recovery callback preserves local drafts;
+  a busy relay is distinguished from an unavailable agent. CentOS ran 46 bridge
+  and image tests successfully, with six Windows-only cases skipped.
+- The user's existing reply exposed a named SVG content image in an inline
+  frame. Its initially clipped position was rejected. During acceptance only,
+  a scoped accessibility scroll brought the whole image into view; production
+  image requests do not scroll or send keys. The verified native-window crop
+  produced a 690×470 PNG (32391 bytes), visually inspected as the landscape.
+- A real production WPF event harness recovered the existing exact-last-user
+  reply over the deployed mTLS relay, then requested and rendered one image
+  card automatically. It received 121 text characters and the 690×470 preview
+  in 11.49 seconds, with zero draft-write requests and zero submit requests.
+  Reencoding that displayed bitmap to PNG succeeded. The SaveFileDialog click
+  itself was not automated. No new model message was sent for image QA.
+- A previous local input lease remained occupied after the older panel closed.
+  Authenticated HTTP 409 identified that condition. After the user saved and
+  closed the panel, only the Windows agent was restarted, with file access
+  paused and pairing preserved. The receiver was updated separately; Claude,
+  hardware acceleration, RDP, file roots and network policy were unchanged.
+  Temporary remote image/last-turn QA files were removed. Desktop UI automation
+  was stopped when the user pressed Escape; subsequent verification used the
+  application's own WPF harness and the established administrative connection.
+- These are labeled preview screenshots of fully visible images, not original
+  SVG/file downloads. Up to four content images are scoped to one completed
+  watched reply; each PNG is at most 80000 bytes and 1024 pixels per side. No
+  arbitrary URL/file fetch, root-desktop capture, browser rendering, new MCP
+  capability or port was added. Hidden/clipped images, standalone artifact
+  sidebars, other Claude versions and Ubuntu acceptance remain outside the
+  observed live result. Shared-desktop focus/layout races remain possible.
+- Source/package/skill validation passed. Go production code and all runtime
+  binaries are unchanged; no Go rebuild was required for this Python/WPF update.
