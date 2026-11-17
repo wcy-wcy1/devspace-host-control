@@ -333,3 +333,27 @@ the task's delivery report; building/testing alone does not establish those.
   branch, all 116 Python skill tests and all 9 Node runner tests passed again.
   Go source/runtime hashes match the previously live-tested feature binaries;
   no Go source was changed during this desktop acceptance.
+
+## Local control page redesign — 2026-11-17
+
+- Extracted the existing embedded control HTML into a Go-embedded control.html;
+  the compiled agent still serves all markup, CSS, SVG and JavaScript locally.
+  No CDN, font request, remote assets or new listener was introduced. Existing
+  localhost bearer-token handling, CSP, host/origin checks and API routes remain.
+- Added translucent light/dark panels, responsive session/permission grouping,
+  readable capability labels, explicit loading/error/revoked/empty states,
+  keyboard focus and reduced-motion support. Pairing revocation remains under
+  a separate disclosure. Permission changes still pause the authorized session.
+- Real headed Chromium through Playwright CLI checked 1280px desktop and
+  390px/320px narrow views using an isolated loopback mock, never the production
+  control token. Actual mock enable/pause and read-only save actions succeeded;
+  saved permissions paused the mock session. No horizontal overflow was observed.
+  Revoked and unavailable states were inspected. On failed status reads, enabling
+  fails closed while local pause/revoke remain available to attempt stopping.
+- Paused/active light and active dark screenshots were visually reviewed. The
+  README screenshot explicitly labels simulated data. The dark primary button
+  and save label have measured text contrast ratios 5.14:1 and 5.67:1.
+- Go tests and vet passed; all 116 Python tests passed. All six runtime binaries
+  were rebuilt, then repository source mirrors and bundle/archive hashes refreshed.
+  Production agent was not restarted during this UI work; the running instance
+  continues to serve its previous page until normally upgraded/restarted.

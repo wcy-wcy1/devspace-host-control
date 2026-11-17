@@ -1,26 +1,26 @@
 {
   "runtime/linux-amd64/hostctl": {
-    "sha256": "076db288d3962e0fdaf0996981b1150398aa7b892c988045beae66d7238e33e5",
+    "sha256": "d6de8bdbb56935f7e345f80f81a73688dbacf596e1d98f8631fdcaf5ea3c79d6",
     "size": 4686008
   },
   "runtime/linux-amd64/hostmcp": {
-    "sha256": "af953d8062e5da6b43977eabe2728a1649dcd3a08ea571eef62adf2c737bd919",
+    "sha256": "9e1ef8ee5d9bcea5a19e62f270f6b9ab5698e5bf81ed9772f13fcf978a6969ed",
     "size": 6553784
   },
   "runtime/linux-arm64/hostctl": {
-    "sha256": "3fea0ebf70883c1af19b3ac69e8be8d3999b0585cbb1d1763bbf102e2562d81a",
+    "sha256": "1123fa79f5ffeeffe401ffbd2607ae1f6d74f91df47769babda9d245176f45f6",
     "size": 4456632
   },
   "runtime/linux-arm64/hostmcp": {
-    "sha256": "9260a323776739909e70801fe87b5bc922e49c17eae173f83ecf3853aa15d8af",
+    "sha256": "6c30060e60b8b72f6b675098a8acad105ae6a511dd01c986c01aede8fb451e5b",
     "size": 6095032
   },
   "runtime/windows-amd64/hostagent.exe": {
-    "sha256": "d2e88d1cb77b50da69bb68b6d8b6356634d223a860f5576e7a80dc8763573aff",
-    "size": 7534592
+    "sha256": "f56c14f55e9b720a8e17a78e013ac7638f1719c68b32a9cd2b674b2f92e80023",
+    "size": 7552000
   },
   "runtime/windows-amd64/hostctl.exe": {
-    "sha256": "9c42977803fdaa2f7fab004d410b62c015d07024037cd53b246c110e1efaeb89",
+    "sha256": "01e493ef965186ea41d2ed0c14285fc019e6a0a0709022505d569e2c35f0c697",
     "size": 5028864
   }
 }
