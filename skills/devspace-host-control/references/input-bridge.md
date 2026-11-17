@@ -1,10 +1,12 @@
 # Local input panel for remote Claude
 
-Experimental: offline protocol tests pass, but Chinese/multiline draft transfer
-has not completed end-to-end acceptance in a real Claude session. Validate the
-paired app version and clipboard path before treating this feature as ready.
+Experimental: Windows + CentOS Stream 9 acceptance verified real Claude draft
+updates with Chinese/multiline text, coalesced edits, deletion and clearing.
+The WPF event harness exercised the real clipboard transport; actual OS IME
+composition and other app versions still require acceptance. Validate the paired
+app version and clipboard path on each deployment.
 
-This optional feature fills a remote Claude draft from a Windows text box.
+This optional feature synchronizes a remote Claude draft from a Windows text box.
 The user reviews and sends in Claude. It does not submit messages, mirror Claude
 responses or replace the remote desktop. Requires an active text-enabled RDP
 connection; disabled clipboard mode cannot use it. No additional network port,
@@ -55,37 +57,67 @@ in its tray; inspect the intended user's main executable before taking action.
 
 1. Use `Start-Claude.cmd` to connect and open Claude, then open a conversation.
 2. Double-click `Claude-Input.cmd` on Windows and enter Chinese or multiline text.
-3. Click **填入远程 Claude**. Keep RDP connected while waiting for confirmation.
-4. Review the resulting Claude draft and send it in Claude yourself.
+3. **实时同步** is enabled by default. Pause typing for about 600 ms to queue the
+   latest text. IME compositions are deferred until committed. Edits, deletions
+   and clearing the local box update the owned remote draft too.
+4. Review the resulting Claude draft and send it in Claude yourself. Uncheck
+   **实时同步** to pause; this does not cancel an already dispatched update.
+5. After remote edits/submission, a detected conversation change or any uncertain
+   outcome, synchronization stops. Handle the remote draft yourself, leave its
+   editor empty, then click **重新连接空草稿** to explicitly start a new stream.
 
-The panel retains the source text. It temporarily owns the clipboard while
-waiting, and restores a snapshot only if its own request/result is still current.
+600 ms is a debounce delay, not an end-to-end latency promise. Only one request
+is in flight; newer edits coalesce into the latest value after acknowledgement.
+No automatic retry follows a timeout. Closing the panel leaves both drafts intact.
+The panel is a singleton per Windows session. Upgrade both receiver and panel;
+old receivers cannot process the version-2 synchronization protocol.
+
+The panel retains the source text. After the first update it owns the clipboard
+through the active synchronization session. It restores a local snapshot when
+paused/closed, only if its own request/result is still current. Restoring between
+consecutive requests races RDP clipboard announcements and can lose updates.
 If another app changes the clipboard, that change is preserved. A timeout is an
-unknown result: inspect Claude before clicking again. Input cannot overwrite a
-nonempty draft; it requires exactly one visible, editable Claude prompt with a
+unknown result: inspect Claude before reconnecting. The first update cannot overwrite
+a nonempty draft; it requires exactly one visible, editable Claude prompt with a
 recognized accessibility hint, not an arbitrary focused application or field.
+Later updates validate the retained editor directly (no full application-tree
+rescan), its document/frame context and exact previous
+text hash. Any mismatch blocks that stream. Ownership and hashes live in memory
+only; after receiver restart a nonempty draft requires manual handling. Context
+checks depend on the app's accessibility metadata and are not a Claude conversation
+ID API; avoid remote navigation while synchronizing.
 
 ## Protocol and verification
 
-Requests and acknowledgements use authenticated `HC-DRAFT/1` text packets over
+Synchronization requests and acknowledgements use authenticated `HC-DRAFT/2` text packets over
 the existing RDP clipboard. Payloads are bounded, timestamped and expire after
 15 seconds. A consumed ID is persisted before UI input, so a lost response or
 receiver restart does not replay it. Clipboard text and draft contents are never
-logged or saved by the receiver. This is ordinary draft input; Claude may handle
+logged or saved by the receiver. Each update carries a stream ID, monotonic
+revision and SHA-256 of the last confirmed text. Empty text is valid for clearing
+an owned draft. Legacy one-shot `HC-DRAFT/1` remains empty-editor-only.
+This is ordinary draft input; Claude may handle
 drafts according to its own application behavior.
 
 Run `input_bridge.py check` in the user's desktop session to count recognized
 prompts without reading or printing their contents. Verify an actual local-panel
 transfer with harmless Chinese and multiline text, observe it remains unsent,
-then verify a second transfer refuses to replace that draft. Test disconnected
-RDP, changed clipboard, timeout, invalid signatures and receiver restart too.
+then verify append, replacement, deletion and clearing. Verify remote edits,
+submission, target/context changes and another panel's stream refuse replacement.
+Test IME composition, rapid edits during a pending request, disconnected RDP,
+changed clipboard, timeout, invalid signatures and receiver restart too.
 Offline tests do not establish live app or RDP clipboard compatibility. An app
 update may require adjusting the prompt accessibility hints; fail visibly rather
 than guessing coordinates or submitting messages. The receiver focuses only the
-PID-verified Claude document frame and performs one Ctrl+V after checking the
-keyboard focus and empty message field again; it never sends Enter. Concurrent
+PID-verified Claude document frame. It rechecks the exact focused editor, window
+and expected previous text before Ctrl+V; replacing an owned draft uses Ctrl+A
+first, and clearing uses BackSpace. It never sends Enter. Concurrent
 local activity inside the same Linux desktop can still change focus, so avoid
 using another remote input tool during a transfer.
+
+On the observed cross-region deployment, version-2 request acknowledgements took
+about 2.9–3.3 seconds after dispatch, in addition to the 600 ms debounce. Do not
+describe this clipboard transport as instantaneous per-keystroke mirroring.
 
 To remove this feature, close the panel, stop only its user receiver, remove the
 named input-bridge helper, autostart entry, config and state directory, and remove

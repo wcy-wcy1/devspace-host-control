@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Opt-in RDP text clipboard bridge: fill an empty Claude prompt, never submit."""
+"""Paired RDP draft bridge: fill or synchronize a Claude draft, never submit."""
 import argparse
 import base64
 import hashlib
@@ -13,6 +13,7 @@ import sys
 import time
 
 PREFIX = 'HC-DRAFT/1 '
+SYNC_PREFIX = 'HC-DRAFT/2 '
 MAX_TEXT = 4000
 TTL = 15
 PROMPT_HINTS = ('reply to claude', 'write your prompt', 'message claude',
@@ -20,16 +21,17 @@ PROMPT_HINTS = ('reply to claude', 'write your prompt', 'message claude',
                 '发送给 claude 的提示词')
 
 
-def packet(key, payload):
+def packet(key, payload, prefix=PREFIX):
     body = base64.b64encode(json.dumps(payload, ensure_ascii=False, separators=(',', ':')).encode()).decode()
     mac = hmac.new(key, body.encode('ascii'), hashlib.sha256).hexdigest()
-    return PREFIX + base64.b64encode(json.dumps({'body': body, 'mac': mac}, separators=(',', ':')).encode()).decode()
+    return prefix + base64.b64encode(json.dumps({'body': body, 'mac': mac}, separators=(',', ':')).encode()).decode()
 
 
 def unpack(key, raw, now=None):
-    if not raw.startswith(PREFIX) or len(raw) > 65536:
+    prefix = SYNC_PREFIX if raw.startswith(SYNC_PREFIX) else PREFIX
+    if not raw.startswith(prefix) or len(raw) > 65536:
         raise ValueError('Not a bridge packet')
-    outer = json.loads(base64.b64decode(raw[len(PREFIX):], validate=True))
+    outer = json.loads(base64.b64decode(raw[len(prefix):], validate=True))
     body, mac = outer['body'], outer['mac']
     if not isinstance(body, str) or not isinstance(mac, str):
         raise ValueError('Invalid envelope')
@@ -43,11 +45,17 @@ def unpack(key, raw, now=None):
         raise ValueError('Expired packet; do not retry automatically')
     if not re.fullmatch('[a-f0-9]{32}', value.get('id', '')):
         raise ValueError('Invalid message ID')
-    if value.get('kind') != 'draft':
+    sync = prefix == SYNC_PREFIX
+    if value.get('kind') != ('sync' if sync else 'draft'):
         raise ValueError('Not a draft')
+    if sync and (not re.fullmatch('[a-f0-9]{32}', value.get('stream', ''))
+                 or not isinstance(value.get('seq'), int) or isinstance(value['seq'], bool)
+                 or not 1 <= value['seq'] <= 2147483647
+                 or not re.fullmatch('[a-f0-9]{64}', value.get('base', ''))):
+        raise ValueError('Invalid sync revision')
     text = value.get('text')
-    if (not isinstance(text, str) or not text.strip() or len(text) > MAX_TEXT
-            or any(ord(c) < 32 and c not in '\r\n\t' for c in text)):
+    if (not isinstance(text, str) or (not sync and not text.strip()) or len(text) > MAX_TEXT
+            or any((ord(c) < 32 and c not in '\r\n\t') or 0xD800 <= ord(c) <= 0xDFFF for c in text)):
         raise ValueError('Invalid text')
     return value
 
@@ -82,6 +90,22 @@ def claude_pid(pid, proc=Path('/proc')):
         return False
 
 
+def prompt_usable(item, Atspi):
+    state = item.get_state_set()
+    attrs = item.get_attributes() or []
+    if isinstance(attrs, dict):
+        attrs = list(attrs.values())
+    hint = (item.get_name() or '') + ' ' + ' '.join(attrs)
+    return (any(s in hint.lower() for s in PROMPT_HINTS)
+            and all(state.contains(s) for s in (Atspi.StateType.EDITABLE,
+                    Atspi.StateType.ENABLED, Atspi.StateType.VISIBLE, Atspi.StateType.SHOWING)))
+
+
+def valid_atspi_prompt(item):
+    from gi.repository import Atspi
+    return claude_pid(item.get_application().get_process_id()) and prompt_usable(item, Atspi)
+
+
 def candidates(desktop, Atspi, verify=claude_pid):
     found = []
     visited = 0
@@ -96,16 +120,8 @@ def candidates(desktop, Atspi, verify=claude_pid):
             visited += 1
             if visited > 5000 or time.monotonic() > deadline:
                 raise ValueError('Claude accessibility tree is too large; select the message input')
-            state = item.get_state_set()
-            attrs = item.get_attributes() or []
-            if isinstance(attrs, dict):
-                attrs = list(attrs.values())
-            hint = (item.get_name() or '') + ' ' + ' '.join(attrs)
-            prompt = any(s in hint.lower() for s in PROMPT_HINTS)
-            usable = all(state.contains(s) for s in (Atspi.StateType.EDITABLE,
-                         Atspi.StateType.ENABLED, Atspi.StateType.VISIBLE, Atspi.StateType.SHOWING))
             # Only a positively identified prompt, never an arbitrary focused field.
-            if usable and prompt:
+            if prompt_usable(item, Atspi):
                 found.append(item)
                 continue
             for i in range(min(item.get_child_count(), 5000)):
@@ -163,8 +179,14 @@ def desktop_command(command):
     return subprocess.run(command, capture_output=True, text=True, timeout=3, check=True).stdout.strip()
 
 
+def editor_focused(node):
+    from gi.repository import Atspi
+    return node.get_state_set().contains(Atspi.StateType.FOCUSED)
+
+
 def paste_prompt(node, text, runner=desktop_command, read=accessible_text,
-                 clip_read=clipboard_read, clip_write=clipboard_write):
+                 clip_read=clipboard_read, clip_write=clipboard_write,
+                 expected='', focused=editor_focused):
     window = runner(['xdotool', 'getwindowfocus'])
     if not window.isdigit():
         return False
@@ -172,12 +194,18 @@ def paste_prompt(node, text, runner=desktop_command, read=accessible_text,
         return False
     clip_write(text)
     # Recheck the exact window and empty editor after acquiring clipboard text.
-    if (clip_read() != text or read(node).strip()
-            or runner(['xdotool', 'getwindowfocus']) != window):
+    def unchanged():
+        return (focused(node) and read(node) == expected
+                and runner(['xdotool', 'getwindowfocus']) == window)
+    if clip_read() != text or not unchanged():
         return False
     # Chromium ignores XSendEvent (--window) paste events. Use XTEST only after
     # checking its actual keyboard focus. Never send Return or submit.
-    runner(['xdotool', 'key', '--clearmodifiers', 'ctrl+v'])
+    if expected:
+        runner(['xdotool', 'key', '--clearmodifiers', 'ctrl+a'])
+        if clip_read() != text or not unchanged():
+            return False
+    runner(['xdotool', 'key', '--clearmodifiers', 'ctrl+v' if text else 'BackSpace'])
     for _ in range(10):
         if read(node) == text:
             return True
@@ -222,14 +250,97 @@ def atspi_tools():
         desktop_command(['xdotool', 'windowraise', windows[0]])
         desktop_command(['xdotool', 'windowfocus', '--sync', windows[0]])
         return node.get_component_iface().grab_focus()
-    def write(node, text):
-        return paste_prompt(node, text)
+    def write(node, text, expected=''):
+        return paste_prompt(node, text, expected=expected)
     return find, focus, read, write
 
 
+def text_hash(text):
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+
+def prompt_context(node):
+    """Bind to the document/frame as well as the editable node; never return text."""
+    context = [node.get_application().get_process_id()]
+    for _ in range(40):
+        if node is None:
+            break
+        role = node.get_role_name()
+        if role in ('frame', 'document web', 'document frame'):
+            context.append((role, node.get_name()))
+            try:
+                context.append(node.get_document_iface().get_attribute_value('DocURL'))
+            except Exception:
+                pass
+        if role == 'frame':
+            break
+        node = node.get_parent()
+    return tuple(context)
+
+
+class DraftSync:
+    """An in-memory lease for one editor, with compare-before-replace revisions."""
+    def __init__(self, find, focus, read, write, context=prompt_context, validate=None):
+        self.find, self.focus, self.read, self.write, self.context = find, focus, read, write, context
+        self.validate = validate
+        self.owner = None
+
+    def apply(self, message):
+        stream, seq, base, text = (message[k] for k in ('stream', 'seq', 'base', 'text'))
+        try:
+            # Once attached, validate the exact retained editor instead of walking
+            # the entire app on every keystroke burst. Never choose a new target.
+            owned = self.owner and self.owner['stream'] == stream
+            if owned and self.owner['blocked']:
+                return 'conflict'
+            if owned and self.validate:
+                nodes = [self.owner['target']] if self.validate(self.owner['target']) else []
+            else:
+                nodes = self.find()
+            if len(nodes) != 1:
+                return 'not_ready'
+            target = nodes[0]
+            current, context = self.read(target), self.context(target)
+            if self.owner and self.owner['stream'] == stream:
+                owner = self.owner
+                if (owner['blocked'] or seq <= owner['seq'] or target != owner['target']
+                        or context != owner['context'] or base != owner['hash']
+                        or text_hash(current) != owner['hash']):
+                    owner['blocked'] = True
+                    return 'conflict'
+            elif current != '' or base != text_hash(''):
+                return 'conflict'
+            else:
+                self.owner = {'stream': stream, 'seq': 0, 'target': target, 'context': context,
+                              'hash': text_hash(''), 'blocked': False}
+            # Consume the revision before focus/input; unknown outcomes poison the lease.
+            owner = self.owner
+            owner['seq'], owner['blocked'] = seq, True
+            if not self.focus(target):
+                return 'not_ready'
+            fresh = ([target] if self.validate(target) else []) if self.validate else self.find()
+            if (len(fresh) != 1 or fresh[0] != target or self.context(target) != context
+                    or self.read(target) != current):
+                return 'conflict'
+        except Exception:
+            if self.owner:
+                self.owner['blocked'] = True
+            return 'not_ready'
+        try:
+            if current != text and not self.write(target, text, current):
+                return 'uncertain'
+            if self.read(target) != text or self.context(target) != context:
+                return 'uncertain'
+            owner['hash'], owner['blocked'] = text_hash(text), False
+            return 'synced'
+        except Exception:
+            return 'uncertain'
+
+
 class Receiver:
-    def __init__(self, key, state, fill):
+    def __init__(self, key, state, fill, sync=None):
         self.key, self.state, self.fill = key, Path(state), fill
+        self.sync = sync
         self.seen = json.loads(self.state.read_text()) if self.state.exists() else []
         if not isinstance(self.seen, list):
             raise ValueError('Invalid bridge journal')
@@ -249,10 +360,12 @@ class Receiver:
             os.fsync(stream.fileno())
         os.replace(temporary, self.state)  # Persist consumption before any UI input.
         try:
-            status = self.fill(message['text'])
+            status = (self.sync.apply(message) if self.sync else 'not_ready') if message['kind'] == 'sync' else self.fill(message['text'])
         except Exception:
             status = 'uncertain'
-        return packet(self.key, {'kind': 'result', 'id': identifier, 'at': int(time.time()), 'status': status})
+        sync = message['kind'] == 'sync'
+        return packet(self.key, {'kind': 'sync_result' if sync else 'result', 'id': identifier,
+                                'at': int(time.time()), 'status': status}, SYNC_PREFIX if sync else PREFIX)
 
 
 def main():
@@ -273,18 +386,20 @@ def main():
         raise ValueError('Bridge state directory must be private')
     with (directory / 'receiver.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        receiver = Receiver(load_key(args.config), directory / 'seen.json', lambda text: fill_prompt(text, *tools))
+        receiver = Receiver(load_key(args.config), directory / 'seen.json',
+                            lambda text: fill_prompt(text, *tools),
+                            DraftSync(*tools, validate=valid_atspi_prompt))
         while True:
             try:
                 raw = clipboard_read()
-                if raw.startswith(PREFIX):
+                if raw.startswith((PREFIX, SYNC_PREFIX)):
                     result = receiver.receive(raw)
                     # Do not overwrite clipboard changes made while working.
                     if result and clipboard_read() in (raw, receiver.last_text):
                         clipboard_write(result)
             except (ValueError, KeyError, TypeError, UnicodeError, OSError, subprocess.SubprocessError):
                 pass  # Other clipboard content is not a request. Never log message text.
-            time.sleep(0.6)
+            time.sleep(0.15)
 
 
 if __name__ == '__main__':

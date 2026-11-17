@@ -61,3 +61,27 @@ Verified on Windows for this update:
 
 Production deployment and actual Claude UI discovery are recorded separately in
 the task's delivery report; building/testing alone does not establish those.
+
+## Continuous draft synchronization — 2026-11-17
+
+- All 89 skill Python tests passed on Windows, including real PowerShell/Python
+  version-2 packet compatibility, revision/base validation, IME/debounce gating,
+  latest-value coalescing, ownership conflicts, timeout/restart refusal and
+  exact editor-focus checks. The 22 bridge tests also ran on CentOS (two
+  Windows-only tests skipped).
+- The deployed Windows client and CentOS receiver exchanged authenticated v2
+  packets over the existing RDP clipboard, updating an actual Claude draft with
+  Chinese, multiline text, emoji, replacement and clearing. Four acknowledgements
+  took 3.015, 3.028, 2.938 and 3.270 seconds. Messages remained unsent.
+- A WPF event harness ran the actual panel callbacks and live clipboard transport:
+  edits during the first in-flight request coalesced into one newest revision,
+  followed by replacement and clearing. All four revisions completed in 14.6
+  seconds, including debounce. A final repeat with idle-clipboard guards took
+  28.1 seconds; this transport has variable latency. The remote editor was empty
+  after both successful runs. No per-keystroke latency guarantee is claimed.
+- Actual Windows IME composition, arbitrary Claude versions and Ubuntu desktop
+  acceptance were not exercised. This remains an experimental bridge.
+- Restored the failed deployment's private xrdp listener, verified TCP access
+  from the paired Windows device, and added on-failure restart to the existing
+  service drop-in. Installer templates carry the same recovery setting.
+  No firewall, ACL, folder permission, GPU or public listener was broadened.

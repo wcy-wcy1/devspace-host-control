@@ -98,6 +98,11 @@ cat > /etc/systemd/system/xrdp.service.d/hostcontrol.conf <<'EOF'
 [Unit]
 Requires=hostcontrol-rdp-firewall.service
 After=hostcontrol-rdp-firewall.service tailscaled.service
+StartLimitIntervalSec=0
+[Service]
+# Retry if the exact Tailscale bind address is not ready at boot.
+Restart=on-failure
+RestartSec=5s
 EOF
 systemctl daemon-reload
 systemctl enable --now hostcontrol-rdp-firewall.service

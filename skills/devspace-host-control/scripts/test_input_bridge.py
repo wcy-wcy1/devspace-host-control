@@ -22,6 +22,118 @@ def request(text='中文输入\nSecond line 😀', **overrides):
     return bridge.packet(KEY, value)
 
 
+def sync_message(text, seq=1, base='', stream='b' * 32):
+    return {'kind': 'sync', 'id': ('%032x' % seq), 'at': int(time.time()),
+            'stream': stream, 'seq': seq, 'base': bridge.text_hash(base), 'text': text}
+
+
+class SyncTests(unittest.TestCase):
+    def setUp(self):
+        self.node = object()
+        self.nodes = [self.node]
+        self.text = ''
+        self.context = 'conversation-1'
+        self.writes = []
+        def write(node, text, expected):
+            self.assertEqual(self.text, expected)
+            self.writes.append(text)
+            self.text = text
+            return True
+        self.sync = bridge.DraftSync(lambda: self.nodes, lambda n: True,
+                                    lambda n: self.text, write, lambda n: self.context)
+
+    def test_sync_appends_replaces_deletes_and_clears_owned_draft(self):
+        previous = ''
+        for seq, text in enumerate(('中', '中文\n第二行 😀', '中文', '', '重新输入'), 1):
+            self.assertEqual(self.sync.apply(sync_message(text, seq, previous)), 'synced')
+            self.assertEqual(self.text, text)
+            previous = text
+        self.assertEqual(len(self.writes), 5)
+
+    def test_existing_unowned_draft_is_never_overwritten(self):
+        self.text = 'keep me'
+        self.assertEqual(self.sync.apply(sync_message('new')), 'conflict')
+        self.assertEqual(self.writes, [])
+
+    def test_remote_edit_submission_or_navigation_blocks_future_updates(self):
+        for change in ('edit', 'send', 'context', 'node'):
+            self.setUp()
+            self.assertEqual(self.sync.apply(sync_message('first')), 'synced')
+            if change == 'edit': self.text = 'remote edit'
+            if change == 'send': self.text = ''
+            if change == 'context': self.context = 'conversation-2'
+            if change == 'node': self.nodes = [object()]
+            self.assertEqual(self.sync.apply(sync_message('second', 2, 'first')), 'conflict')
+            self.assertEqual(self.writes, ['first'])
+            self.assertEqual(self.sync.apply(sync_message('third', 3, 'first')), 'conflict')
+
+    def test_old_revisions_wrong_base_and_other_panel_cannot_replace(self):
+        self.assertEqual(self.sync.apply(sync_message('first')), 'synced')
+        self.assertEqual(self.sync.apply(sync_message('other', 1, stream='c' * 32)), 'conflict')
+        self.assertEqual(self.sync.apply(sync_message('older', 1, 'first')), 'conflict')
+        self.assertEqual(self.writes, ['first'])
+        self.setUp()
+        self.sync.apply(sync_message('first'))
+        self.assertEqual(self.sync.apply(sync_message('second', 2, 'wrong')), 'conflict')
+
+    def test_unknown_outcome_and_restart_require_explicit_empty_reconnect(self):
+        def failed(node, text, expected):
+            self.text = text
+            raise TimeoutError()
+        self.sync.write = failed
+        self.assertEqual(self.sync.apply(sync_message('maybe')), 'uncertain')
+        self.assertEqual(self.sync.apply(sync_message('retry', 2, '')), 'conflict')
+        self.setUp()
+        self.text = 'draft remaining after receiver restart'
+        self.assertEqual(self.sync.apply(sync_message('next', 2, 'previous')), 'conflict')
+        self.text = ''
+        self.assertEqual(self.sync.apply(sync_message('new', stream='c' * 32)), 'synced')
+
+    def test_change_during_focus_never_writes(self):
+        def focus(node):
+            self.text = 'remote edit'
+            return True
+        self.sync.focus = focus
+        self.assertEqual(self.sync.apply(sync_message('new')), 'conflict')
+        self.assertEqual(self.writes, [])
+
+    def test_retained_target_fast_path_validates_without_rescanning(self):
+        calls = []
+        self.sync.find = lambda: calls.append('scan') or self.nodes
+        self.sync.validate = lambda n: n in self.nodes
+        self.assertEqual(self.sync.apply(sync_message('first')), 'synced')
+        self.assertEqual(self.sync.apply(sync_message('second', 2, 'first')), 'synced')
+        self.assertEqual(calls, ['scan'])
+        self.nodes = []
+        self.assertEqual(self.sync.apply(sync_message('third', 3, 'second')), 'not_ready')
+        self.assertEqual(self.writes, ['first', 'second'])
+
+    def test_v2_validation_and_empty_text(self):
+        value = sync_message('')
+        raw = bridge.packet(KEY, value, bridge.SYNC_PREFIX)
+        self.assertEqual(bridge.unpack(KEY, raw), value)
+        for changes in ({'seq': 0}, {'seq': True}, {'base': 'bad'}, {'stream': 'bad'},
+                        {'text': 'a\x00b'}, {'text': 'x' * 4001}, {'kind': 'draft'}):
+            invalid = dict(value, **changes)
+            with self.assertRaises(ValueError):
+                bridge.unpack(KEY, bridge.packet(KEY, invalid, bridge.SYNC_PREFIX))
+        with self.assertRaises(ValueError):
+            bridge.unpack(KEY, bridge.packet(KEY, value))
+
+    def test_receiver_persists_id_before_sync_and_never_logs_draft(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / 'seen.json'
+            receiver = bridge.Receiver(KEY, state, lambda t: self.fail('legacy fill'), self.sync)
+            raw = bridge.packet(KEY, sync_message('中文\n😀'), bridge.SYNC_PREFIX)
+            result = receiver.receive(raw)
+            outer = json.loads(base64.b64decode(result[len(bridge.SYNC_PREFIX):]))
+            payload = json.loads(base64.b64decode(outer['body']))
+            self.assertEqual(payload['status'], 'synced')
+            self.assertIsNone(receiver.receive(raw))
+            self.assertIsNone(bridge.Receiver(KEY, state, None, self.sync).receive(raw))
+            self.assertNotIn('中文', state.read_text())
+
+
 class BridgeTests(unittest.TestCase):
     def test_unicode_multiline_authenticated_roundtrip_and_rejections(self):
         self.assertEqual(bridge.unpack(KEY, request())['text'], '中文输入\nSecond line 😀')
@@ -92,7 +204,7 @@ class BridgeTests(unittest.TestCase):
             return ''
         def put(text): clipboard[0] = text
         def read(n): return '测试' if any(c[1] == 'key' for c in calls) else ''
-        self.assertTrue(bridge.paste_prompt(node, '测试', runner, read, lambda: clipboard[0], put))
+        self.assertTrue(bridge.paste_prompt(node, '测试', runner, read, lambda: clipboard[0], put, focused=lambda n: True))
         inputs = [c for c in calls if c[1] == 'key']
         self.assertEqual(inputs, [['xdotool', 'key', '--clearmodifiers', 'ctrl+v']])
         calls.clear()
@@ -100,8 +212,32 @@ class BridgeTests(unittest.TestCase):
         def changed(command):
             calls.append(command)
             return next(windows) if command[1] == 'getwindowfocus' else '42'
-        self.assertFalse(bridge.paste_prompt(node, '测试', changed, lambda n: '', lambda: clipboard[0], put))
+        self.assertFalse(bridge.paste_prompt(node, '测试', changed, lambda n: '', lambda: clipboard[0], put, focused=lambda n: True))
         self.assertFalse(any(c[1] == 'key' for c in calls))
+
+    def test_replace_and_clear_only_focused_matching_editor(self):
+        class Node:
+            def get_application(self): return self
+            def get_process_id(self): return 42
+        node = Node()
+        for new in ('new\n中文', ''):
+            text, clip, calls = ['old'], [''], []
+            def runner(command):
+                calls.append(command)
+                if command[1] == 'getwindowfocus': return '123'
+                if command[1] == 'getwindowpid': return '42'
+                if command[-1] in ('ctrl+v', 'BackSpace'): text[0] = new
+                return ''
+            self.assertTrue(bridge.paste_prompt(node, new, runner, lambda n: text[0],
+                                               lambda: clip[0], lambda t: clip.__setitem__(0, t),
+                                               expected='old', focused=lambda n: True))
+            self.assertEqual([c[-1] for c in calls if c[1] == 'key'],
+                             ['ctrl+a', 'ctrl+v' if new else 'BackSpace'])
+            calls.clear()
+            self.assertFalse(bridge.paste_prompt(node, new, runner, lambda n: 'old',
+                                                lambda: clip[0], lambda t: clip.__setitem__(0, t),
+                                                expected='old', focused=lambda n: False))
+            self.assertFalse(any(c[1] == 'key' for c in calls))
 
     def test_focus_failure_is_not_ready_but_paste_failure_is_uncertain(self):
         node = object()
@@ -201,6 +337,44 @@ class BridgeTests(unittest.TestCase):
         result = subprocess.run(['powershell.exe', '-NoProfile', '-EncodedCommand', encoded],
                                 capture_output=True, text=True, timeout=20, check=True)
         self.assertEqual(result.stdout.strip(), 'filled')
+
+    @unittest.skipUnless(os.name == 'nt' and shutil.which('powershell.exe'), 'Windows PowerShell protocol')
+    def test_powershell_sync_protocol_debounce_ime_and_latest_queue(self):
+        script = Path(__file__).with_name('claude-input.ps1')
+        ack = bridge.packet(KEY, {'kind': 'sync_result', 'id': IDENTIFIER,
+                                 'at': int(time.time()), 'status': 'synced'}, bridge.SYNC_PREFIX)
+        code = (". '" + str(script).replace("'", "''") + "' -FunctionsOnly\n"
+                "$key=[byte[]](0..31)\n"
+                "New-BridgePacket $key ('a'*32) '' ('b'*32) 1 (Get-DraftHash '')\n"
+                "Read-BridgeResult $key ('a'*32) '" + ack + "' -Sync\n"
+                "Read-BridgeResult $key ('a'*32) '" + ack + "'\n"
+                "$now=[DateTime]::UtcNow\n"
+                "$s=@{enabled=$true;paused=$false;composing=$false;pending=$null;confirmed='';changed=$now}\n"
+                "Get-SyncDecision $s 'latest' $now\n"
+                "$s.changed=$now.AddSeconds(-1)\n"
+                "Get-SyncDecision $s 'latest' $now\n"
+                "$s.pending=@{text='older'}\n"
+                "Get-SyncDecision $s 'latest' $now\n"
+                "$s.pending=$null; $s.composing=$true\n"
+                "Get-SyncDecision $s 'latest' $now\n"
+                "$s.composing=$false; $s.confirmed='older'\n"
+                "Get-SyncDecision $s 'latest' $now\n"
+                "$s.confirmed='latest'\n"
+                "Get-SyncDecision $s 'latest' $now\n"
+                "$s.paused=$true\n"
+                "Get-SyncDecision $s 'different' $now\n"
+                "$s.clipHashes=@((Get-DraftHash \"old`nline\"),(Get-DraftHash 'latest'))\n"
+                "Test-OtherClipboard $s \"old`r`nline\"\n"
+                "Test-OtherClipboard $s ''\n"
+                "Test-OtherClipboard $s 'latest'\n"
+                "Test-OtherClipboard $s 'unrelated copy'\n")
+        result = subprocess.run(['powershell.exe', '-NoProfile', '-EncodedCommand',
+                                 base64.b64encode(code.encode('utf-16-le')).decode()],
+                                capture_output=True, text=True, timeout=20, check=True)
+        lines = result.stdout.strip().splitlines()
+        self.assertEqual(bridge.unpack(KEY, lines[0])['text'], '')
+        self.assertEqual(lines[1:], ['synced', 'wait', 'send', 'wait', 'wait', 'send', 'wait', 'wait',
+                                   'False', 'False', 'False', 'True'])
 
 
 if __name__ == '__main__':

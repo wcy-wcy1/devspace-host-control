@@ -169,6 +169,12 @@ cat > /etc/systemd/system/xrdp.service.d/hostcontrol.conf <<'EOF'
 [Unit]
 Requires=hostcontrol-rdp-firewall.service
 After=hostcontrol-rdp-firewall.service tailscaled.service
+StartLimitIntervalSec=0
+[Service]
+# The daemon may start before Tailscale has assigned its bound VPN address.
+# Retry the same private listener; never fall back to a wildcard bind.
+Restart=on-failure
+RestartSec=5s
 EOF
 systemctl daemon-reload
 systemctl enable --now hostcontrol-rdp-firewall.service
