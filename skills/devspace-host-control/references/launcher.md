@@ -59,6 +59,16 @@ Closing RDP disconnects the view and may leave the Linux session running.
 Pause/close the visible Windows agent console to stop computer control. Closing
 the CMD launcher alone does not terminate the separate agent console.
 
+Keep Claude hardware acceleration enabled. Diagnose remote rendering without
+adding GPU-disabling startup flags or changing desktop effects automatically.
+
+## Optional local input panel
+
+For a Windows text box that fills the remote Claude draft, follow
+[input-bridge.md](input-bridge.md). It adds a separate `Claude-Input.cmd` entry
+after explicit pairing. Keep text clipboard enabled and RDP connected. The panel
+never submits the draft or replaces existing nonempty input.
+
 ## Verify and undo
 
 Check new login and reconnect separately with Claude first closed after saving

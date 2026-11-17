@@ -30,7 +30,7 @@ func Tools() []Tool {
 		}
 		tools = append(tools, Tool{name, desc, map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}, map[string]any{"readOnlyHint": read, "destructiveHint": !read, "openWorldHint": true}})
 	}
-	add("host_status", "Read anonymous host capabilities and local authorization state.", nil, []string{}, true)
+	add("host_status", "Read allowed capabilities, workspace aliases and local authorization state; no host paths.", nil, []string{}, true)
 	add("session_info", "Read local session state. Sessions can only be enabled locally.", nil, []string{}, true)
 	for _, name := range []string{"fs_list", "fs_read", "fs_write", "fs_move"} {
 		p := map[string]any{"workspace": s("Configured workspace alias"), "path": s("Relative slash-separated path")}
@@ -164,7 +164,12 @@ func RunMCP(in io.Reader, out io.Writer, call Caller) error {
 				code = -32000
 				message = "initialize first"
 			} else {
-				result = map[string]any{"tools": Tools()}
+				policy, _, err := discoverPolicy(call)
+				if err != nil {
+					code, message = -32000, err.Error()
+				} else {
+					result = map[string]any{"tools": policy.tools()}
+				}
 			}
 		case "tools/call":
 			if !initialized {
@@ -192,6 +197,27 @@ func RunMCP(in io.Reader, out io.Writer, call Caller) error {
 			if !found {
 				code = -32602
 				message = "unknown tool"
+				break
+			}
+			policy, status, err := discoverPolicy(call)
+			if err != nil {
+				result = errorResult(err)
+				break
+			}
+			if !policy.permitsTool(p.Name) {
+				result = errorResult(fmt.Errorf("tool disabled by local host policy"))
+				break
+			}
+			if capability(p.Name) == "files" && !policy.permitsWorkspace(str(p.Arguments, "workspace"), p.Name == "fs_write" || p.Name == "fs_move") {
+				result = errorResult(fmt.Errorf("workspace operation denied by local host policy"))
+				break
+			}
+			if p.Name == "host_status" || p.Name == "session_info" {
+				if err := validateArguments(p.Name, p.Arguments); err != nil {
+					result = errorResult(err)
+				} else {
+					result = status
+				}
 				break
 			}
 			v, e := call(context.Background(), Call{OperationID: randomID(), Name: p.Name, Arguments: p.Arguments})

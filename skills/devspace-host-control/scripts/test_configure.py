@@ -31,7 +31,16 @@ class ConfigurationTests(unittest.TestCase):
             data=json.loads(out.read_text(encoding='utf-8'))
             self.assertEqual(data['peer_ip'],'100.80.0.2')
             self.assertEqual(data['listen'],'100.80.0.1:7443')
+            self.assertEqual(data['capabilities'], ['files'])
+            self.assertEqual(data['workspace_access'], {'work': 'read-write'})
             self.assertNotEqual(subprocess.run(command,capture_output=True).returncode,0)
+
+    def test_read_only_workspace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out=pathlib.Path(directory)/'agent.json'
+            command=[sys.executable,str(pathlib.Path(__file__).with_name('configure.py')),'agent','--windows-ip','100.80.0.1','--ubuntu-ip','100.80.0.2','--credential-dir',directory,'--fingerprint','a'*64,'--workspace',directory,'--workspace-access','read-only','--out',str(out)]
+            subprocess.run(command,check=True,capture_output=True)
+            self.assertEqual(json.loads(out.read_text(encoding='utf-8'))['workspace_access'], {'work': 'read-only'})
 
     def test_client_and_claude_config(self):
         with tempfile.TemporaryDirectory() as directory:

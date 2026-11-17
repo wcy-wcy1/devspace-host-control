@@ -27,14 +27,13 @@ def main():
         config=root/'client.json';config.write_text(json.dumps(cfg),encoding='utf-8')
         messages=[{'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-11-25'}},
                   {'jsonrpc':'2.0','method':'notifications/initialized'},
-                  {'jsonrpc':'2.0','id':2,'method':'tools/list'}]
+                  {'jsonrpc':'2.0','id':2,'method':'ping'}]
         completed=subprocess.run([mcp,'--config',str(config)],input=''.join(json.dumps(x)+'\n' for x in messages),
                                  capture_output=True,text=True,check=True,timeout=15)
         responses=[json.loads(line) for line in completed.stdout.splitlines()]
         assert len(responses)==2, 'stdout contains non-protocol data or unexpected messages'
-        tools=responses[1]['result']['tools'];names={x['name'] for x in tools}
-        assert len(names)==18 and {'fs_read','exec_start','desktop_capture','desktop_inspect','desktop_click','browser_open'} <= names
+        assert responses[1]['result']=={}
         assert responses[0]['result']['protocolVersion']=='2025-11-25'
-        print('Executable smoke passed: local PKI roundtrip, initialize, notification, 18 tool schemas; no network connection or UI input.')
+        print('Executable smoke passed: local PKI roundtrip, initialize, notification and ping; no network connection or UI input. Authenticated tool discovery is covered by Go integration tests.')
 
 if __name__=='__main__':main()

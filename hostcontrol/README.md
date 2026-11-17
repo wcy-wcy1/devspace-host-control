@@ -45,6 +45,12 @@ Credentials must stay outside workspaces and distributable source/skill assets.
 
 ## Implemented tools
 
+This is the complete catalog, not the tools advertised for every deployment.
+The adapter discovers the authenticated Windows policy for each list/call and
+fails closed if it cannot obtain policy version 1. Update the Windows agent
+before the Linux adapter; older agents do not implement this policy contract.
+Paused/expired sessions allow metadata-only status discovery, never file access.
+
 `host_status`, `session_info`, `fs_list`, `fs_read`, `fs_write`, `fs_move`,
 `exec_start`, `exec_poll`, `exec_cancel`, `desktop_windows`, `desktop_inspect`,
 `desktop_focus`, `desktop_capture`, `desktop_click`, `desktop_type`,
@@ -57,6 +63,29 @@ bounded to 500 elements and eight seconds; it does not require a .NET SDK.
 Browser operation uses the real default browser and desktop tools. DOM automation,
 interactive ConPTY, automatic certificate renewal and an anonymity relay are not
 implemented.
+
+## Workspace permissions
+
+New generated configurations default to `capabilities: ["files"]`.
+`roots` maps workspace aliases to local directories. Optional
+`workspace_access` maps those same aliases to `read-only` or `read-write`;
+omission preserves existing read/write grants. Unknown aliases/modes are rejected.
+The generator accepts `--workspace-access read-only`.
+
+The private localhost control page shows actual directories, capabilities and
+remaining authorization time. Only this local authenticated page can persist a
+mode change; it cannot add roots or capabilities. Changes are serialized with
+tool calls, back up the configuration, pause the session and cancel tasks.
+An externally modified config is not overwritten. Re-enable locally after saving.
+MCP status contains only workspace aliases and access modes, never host paths.
+The adapter omits writes when all workspaces are read-only and restricts the
+workspace schema to permitted aliases; the Windows service independently checks
+each write/move before deduplication, including old request IDs.
+
+Clipboard redirection remains a separately configured channel, enabled for text
+by default. The panel does not inspect clipboard contents or claim that folder
+permissions restrict clipboard data. Arbitrary execution/desktop capabilities,
+if explicitly enabled separately, are not confined by file read-only modes.
 
 ## Boundaries
 

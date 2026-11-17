@@ -158,8 +158,11 @@ func TestExpiredAndDisabledCapabilities(t *testing.T) {
 	s.mu.Lock()
 	s.deadline = time.Now().Add(-time.Second)
 	s.mu.Unlock()
-	if !invoke(s, "host_status", nil).IsError {
-		t.Fatal("expired session accepted")
+	if !invoke(s, "fs_list", args("workspace", "work", "path", ".")).IsError {
+		t.Fatal("expired session accepted file access")
+	}
+	if invoke(s, "host_status", nil).IsError {
+		t.Fatal("expired session blocked safe policy discovery")
 	}
 	s.Enable(1)
 	s.cfg.Capabilities = []string{"files"}
@@ -177,7 +180,7 @@ func TestMCPWireFormat(t *testing.T) {
 		if c.OperationID == "" {
 			t.Fatal("missing ID")
 		}
-		return textResult(map[string]any{"active": true}), nil
+		return textResult(map[string]any{"active": true, "policy_version": policyVersion, "capabilities": []string{"files", "exec", "desktop"}, "workspaces": []WorkspacePolicy{{Name: "work", Access: "read-write"}}}), nil
 	})
 	if e != nil {
 		t.Fatal(e)
@@ -193,7 +196,7 @@ func TestMCPWireFormat(t *testing.T) {
 		}
 		responses = append(responses, r)
 	}
-	if len(responses) != 5 || count != 1 {
+	if len(responses) != 5 || count != 2 {
 		t.Fatal("protocol message count", len(responses), count)
 	}
 	tools := responses[3]["result"].(map[string]any)["tools"].([]any)
@@ -263,6 +266,14 @@ func TestMutualTLSAndSourceFilter(t *testing.T) {
 	r, e := caller(context.Background(), call)
 	if e != nil || r.IsError {
 		t.Fatal("paired call", e, r)
+	}
+	if err := s.Pause(false); err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.Capabilities = []string{"files"}
+	policy, _, err := discoverPolicy(caller)
+	if err != nil || len(policy.tools()) != 6 || policy.permitsTool("exec_start") {
+		t.Fatal("authenticated paused discovery did not enforce files-only", err)
 	}
 	cfg.ServerFingerprint = strings.Repeat("f", 64)
 	bad, _ := NewCaller(cfg)

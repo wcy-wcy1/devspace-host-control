@@ -25,7 +25,7 @@ func main() {
 		fmt.Println("configuration valid")
 		return
 	}
-	s, e := host.NewService(c)
+	s, e := host.NewServiceFromFile(*config)
 	if e != nil {
 		fail(e)
 	}

@@ -47,7 +47,12 @@ def start(root, uid, environment, executable, spawn=subprocess.Popen):
         return 'already_running'
     env = dict(environment)
     env.update(session_environment(root, uid, env.get('DISPLAY')))
-    spawn([executable], env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+    command = [executable]
+    # Accessibility is opt-in for the explicitly paired local draft panel.
+    home = environment.get('HOME')
+    if home and (Path(home) / '.config/hostcontrol/input-bridge.json').is_file():
+        command.append('--force-renderer-accessibility')
+    spawn(command, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
           stderr=subprocess.DEVNULL, start_new_session=True)
     return 'started'
 

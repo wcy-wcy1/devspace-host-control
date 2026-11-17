@@ -55,16 +55,18 @@ type cached struct {
 	at     time.Time
 }
 type Service struct {
-	cfg      Config
-	mu       sync.Mutex
-	deadline time.Time
-	revoked  bool
-	cache    map[string]cached
-	callMu   sync.Mutex
-	tasksMu  sync.Mutex
-	tasks    map[string]*Task
-	desktop  desktopState
-	audit    *log.Logger
+	cfg        Config
+	mu         sync.Mutex
+	deadline   time.Time
+	revoked    bool
+	cache      map[string]cached
+	callMu     sync.Mutex
+	tasksMu    sync.Mutex
+	tasks      map[string]*Task
+	desktop    desktopState
+	audit      *log.Logger
+	configPath string
+	configHash [32]byte
 }
 
 func NewService(c Config) (*Service, error) {
@@ -125,7 +127,7 @@ func (s *Service) active() bool {
 func (s *Service) Status() map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return map[string]any{"version": Version, "active": !s.revoked && time.Now().Before(s.deadline), "expires_at": s.deadline, "revoked": s.revoked, "capabilities": s.cfg.Capabilities}
+	return map[string]any{"version": Version, "policy_version": policyVersion, "active": !s.revoked && time.Now().Before(s.deadline), "expires_at": s.deadline, "revoked": s.revoked, "capabilities": append([]string(nil), s.cfg.Capabilities...), "workspaces": s.cfg.workspacePolicies()}
 }
 func (s *Service) Watch(stop <-chan struct{}) {
 	t := time.NewTicker(time.Second)
@@ -165,14 +167,26 @@ func (s *Service) Call(c Call) Result {
 	}
 	s.callMu.Lock()
 	defer s.callMu.Unlock()
-	if !s.active() {
-		return errorResult(fmt.Errorf("local session is paused, expired or revoked"))
-	}
 	if !validToolName(c.Name) {
 		return errorResult(fmt.Errorf("invalid tool name"))
 	}
 	if e := validateArguments(c.Name, c.Arguments); e != nil {
 		return errorResult(e)
+	}
+	// Authenticated policy discovery must work while paused. It contains aliases
+	// and modes, never host paths, and cannot enable or extend a session.
+	if c.Name == "host_status" || c.Name == "session_info" {
+		return textResult(s.Status())
+	}
+	if !s.active() {
+		return errorResult(fmt.Errorf("local session is paused, expired or revoked"))
+	}
+	cap := capability(c.Name)
+	if cap != "" && !s.cfg.Has(cap) {
+		return errorResult(fmt.Errorf("capability disabled locally"))
+	}
+	if (c.Name == "fs_write" || c.Name == "fs_move") && s.cfg.access(str(c.Arguments, "workspace")) != "read-write" {
+		return errorResult(fmt.Errorf("workspace is read-only or unavailable"))
 	}
 	b, _ := json.Marshal(c)
 	h := sha256.Sum256(b)
@@ -191,10 +205,6 @@ func (s *Service) Call(c Call) Result {
 		if len(s.cache) >= 2048 {
 			return errorResult(fmt.Errorf("operation capacity reached; restart after ending session"))
 		}
-	}
-	cap := capability(c.Name)
-	if cap != "" && !s.cfg.Has(cap) {
-		return errorResult(fmt.Errorf("capability disabled locally"))
 	}
 	var v any
 	var e error

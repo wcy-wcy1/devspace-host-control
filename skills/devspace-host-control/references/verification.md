@@ -13,6 +13,7 @@
 1. From the approved Windows device, connect to Ubuntu RDP. From an unapproved device, verify refusal. Test the actual deployed complete Tailscale policy, not only a generated JSON fragment.
 2. From paired Ubuntu, reach only the explicit agent endpoint. Verify another tailnet peer, wrong/missing client certificate, wrong server fingerprint and unwanted address family fail. Binding, firewall and tailnet grants each need evidence.
 3. Default agent startup must remain paused. Local enable admits authorized calls; expiry rejects new calls. Pause cancels tasks. Revocation survives restart. Wrong/empty configuration must not start a wildcard listener.
+   Authenticated metadata-only status remains queryable while paused/expired. Verify files-only discovery omits exec/desktop, readonly workspaces reject direct writes/moves and old mutation IDs, and policy lookup failures do not restore the full catalog. Test permission changes/restart persistence using temporary configs; do not toggle the user's production grants for QA.
 4. Confirm RDP clipboard matches the configured mode: text-only by default with clipboard file/image formats denied, or explicitly disabled. Confirm drive/device sharing remains unavailable. Test a harmless clipboard marker only after saving work, logging out and reconnecting with the matching client file. Do not inspect existing clipboard contents. Check that Linux was not given a LAN route or configured to use the local machine as an exit node.
 
 ## Server and application timezone

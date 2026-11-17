@@ -70,7 +70,8 @@ def main():
     parser.add_argument('--credential-dir')
     parser.add_argument('--fingerprint', type=fingerprint)
     parser.add_argument('--workspace', help='existing host directory (agent mode)')
-    parser.add_argument('--capabilities', default='files,exec,desktop')
+    parser.add_argument('--capabilities', default='files', help='explicit subset of files,exec,desktop; default files')
+    parser.add_argument('--workspace-access', choices=['read-only', 'read-write'], default='read-write')
     parser.add_argument('--session-minutes', type=int, default=30)
     parser.add_argument('--policy-file')
     parser.add_argument('--mcp-binary', default='/opt/hostcontrol/hostmcp')
@@ -113,6 +114,7 @@ def main():
                         'ca': str(directory/'ca.pem'), 'cert': str(directory/'agent.pem'),
                         'key': str(directory/'agent-key.pem'), 'peer_fingerprint': options.fingerprint,
                         'roots': {'work': str(pathlib.Path(options.workspace).resolve())},
+                        'workspace_access': {'work': options.workspace_access},
                         'capabilities': caps, 'session_minutes': options.session_minutes}
         else:
             document = {'endpoint': 'https://' + authority(options.windows_ip, options.port),

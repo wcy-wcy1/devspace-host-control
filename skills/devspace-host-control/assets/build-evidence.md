@@ -35,3 +35,29 @@ Original tracked DevSpace files were not changed. No upstream DevSpace test-suit
 - The bundle provides no anonymity relay, DOM/Playwright integration, UIA element action dispatch, interactive ConPTY or unattended certificate renewal. It does not establish zero fingerprint leakage or full isolation of the real Windows host.
 
 Source inspection corrected repeated EnumWindows callback allocation to use one synchronized callback. Ubuntu bootstrap failure handling stops and persistently masks RDP across reboot; its actual systemd behavior still needs Ubuntu verification.
+
+## Files-only policy update — 2026-11-17
+
+The preceding section records the original assembly, not this update's tool
+discovery contract. Runtime binaries were rebuilt with portable Go 1.25.9 for
+Windows amd64 and Linux amd64/arm64. Authenticated live policy now determines
+advertised tools. Offline/old peers no longer produce the full 18-tool catalog.
+
+Verified on Windows for this update:
+
+- `go test ./... -count=1` and `go vet ./...` passed. The actual selected
+  files-only config was also tested through the opt-in fixture harness under
+  the approved directory, with no production listener/session authorization.
+- New tests cover paused policy discovery, failed/old/malformed policy refusal,
+  mixed workspace permissions, metadata filtering, direct readonly mutation
+  rejection, stale mutation IDs, local-only mode changes, pause on mode save,
+  restart persistence and external configuration edit refusal.
+- Real loopback mTLS tests include authenticated files-only discovery while
+  paused, alongside identity and source rejection checks.
+- All 78 skill Python tests passed. The control-page JavaScript passed
+  `node --check`; this is syntax checking, not visual browser acceptance.
+- Live desktop screenshot/input acceptance was not requested for this update.
+  No additional VM, proxy, routing or GPU changes were made.
+
+Production deployment and actual Claude UI discovery are recorded separately in
+the task's delivery report; building/testing alone does not establish those.

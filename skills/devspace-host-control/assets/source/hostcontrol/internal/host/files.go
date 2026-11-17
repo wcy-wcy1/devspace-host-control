@@ -79,6 +79,9 @@ func readLimited(r *os.Root, p string) ([]byte, error) {
 }
 
 func (s *Service) fileCall(name string, a map[string]any) (any, error) {
+	if (name == "fs_write" || name == "fs_move") && s.cfg.access(str(a, "workspace")) != "read-write" {
+		return nil, fmt.Errorf("workspace is read-only or unavailable")
+	}
 	r, p, e := s.workspace(a)
 	if e != nil {
 		return nil, e

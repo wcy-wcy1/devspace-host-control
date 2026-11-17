@@ -13,6 +13,7 @@ Ubuntu 22.04/24.04 is the primary path. CentOS Stream 9 x86_64 is an explicitly 
 
 - For source changes in the project checkout, use top-level `hostcontrol/`; in a standalone skill bundle use `assets/source/hostcontrol`; no cloud credentials or live network changes are needed. Read [verification.md](references/verification.md), build/test, then refresh matching runtime assets and their checksums. State which checks were actually run.
 - For installation, one-step setup, automation, resume, pairing or repair, use [automation.md](references/automation.md) as the default executor workflow and [operations.md](references/operations.md) for pairing details. Discover actual state, reuse session authorization and existing answers, execute the ready stages, and verify live results. Ask the user directly only for missing necessary inputs, interactive login/UAC, local session enable, or a concrete change outside the established scope. Continue independent work while waiting. Do not stop at a plan or ask the user to run routine steps that available tools can execute.
+- For a local text box that fills remote Claude drafts, use [input-bridge.md](references/input-bridge.md). It is opt-in, requires an active text-enabled RDP session, and never submits the message.
 - For identity, fingerprint, routing or isolation requirements, also read [privacy.md](references/privacy.md). Preserve the user's accepted real-desktop scope while stating its actual boundary.
 
 ## Operational invariants
@@ -31,6 +32,8 @@ During deployment, align Linux time with the user-confirmed datacenter IANA time
 
 General host execution and GUI access are not sandboxed by workspace restrictions. Do not promise zero fingerprint leakage: authorized screenshots, UI text and command output may reveal local identity, and Tailscale may expose public endpoint metadata. The bundle does not implement an anonymity relay.
 
+New generated agents default to files-only; preserve the user's selected capabilities and roots on updates. For a files-only deployment do not re-enable exec/desktop to complete QA. Per-workspace `workspace_access` supports read-only/read-write; omission preserves existing read/write grants. The private local panel can save modes for existing roots, then pauses the session. MCP discovery uses authenticated live policy and fails closed on unavailable/older agents; update Windows before Linux. Remote status shows aliases/modes only. Clipboard is independent and remains in the explicitly selected mode. See [privacy.md](references/privacy.md) for the boundary.
+
 ## Resources
 
 - `assets/runtime/windows-amd64/`: `hostagent.exe`, `hostctl.exe`.
@@ -48,6 +51,7 @@ General host execution and GUI access are not sandboxed by workspace restriction
 - `scripts/linux_session.py`: prepare the intended user's XFCE/keyring session and CentOS PAM auth order without storing passwords.
 - `scripts/launcher.py`, `scripts/start-hostcontrol.ps1` and `scripts/claude_session.py`: generate the double-click agent/RDP entry and configure user-scoped Claude login/reconnect startup; see [launcher.md](references/launcher.md). No password copied or control auto-enable.
 - `scripts/start-windows-agent.ps1`: visible foreground Windows launcher, paused by default, with PowerShell module-path isolation for UIA children.
+- `scripts/input_bridge.py`, `scripts/input_bridge_setup.py`, `scripts/claude-input.ps1` and `scripts/setup-claude-input.ps1`: paired local draft panel and Linux accessibility receiver; see [input-bridge.md](references/input-bridge.md).
 - `scripts/test_*.py`: offline configuration, policy transaction, resume, desktop and integration regressions; not live-desktop acceptance.
 
 Return the produced artifact or observable deployment result. Distinguish local automated checks, live-desktop checks and real Claude/Ubuntu integration. Keep secrets and local control tokens out of summaries. Do not ask for deployment parameters when the user requested only the skill or source.

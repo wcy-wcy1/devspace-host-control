@@ -23,6 +23,7 @@ type Config struct {
 	Key             string            `json:"key"`
 	PeerFingerprint string            `json:"peer_fingerprint"`
 	Roots           map[string]string `json:"roots"`
+	WorkspaceAccess map[string]string `json:"workspace_access,omitempty"`
 	Capabilities    []string          `json:"capabilities"`
 	SessionMinutes  int               `json:"session_minutes"`
 	Audit           string            `json:"audit,omitempty"`
@@ -42,12 +43,16 @@ func ReadJSON(path string, dst any) error {
 		return err
 	}
 	defer f.Close()
-	d := json.NewDecoder(io.LimitReader(f, 1<<20))
+	return decodeJSON(f, dst)
+}
+
+func decodeJSON(r io.Reader, dst any) error {
+	d := json.NewDecoder(io.LimitReader(r, 1<<20))
 	d.DisallowUnknownFields()
-	if err = d.Decode(dst); err != nil {
+	if err := d.Decode(dst); err != nil {
 		return err
 	}
-	if err = d.Decode(new(any)); err != io.EOF {
+	if err := d.Decode(new(any)); err != io.EOF {
 		return fmt.Errorf("configuration must contain one JSON value")
 	}
 	return nil
@@ -98,6 +103,11 @@ func (c *Config) Validate() error {
 		st, e := os.Stat(path)
 		if e != nil || !st.IsDir() {
 			return fmt.Errorf("workspace %q must be an existing directory", name)
+		}
+	}
+	for name, access := range c.WorkspaceAccess {
+		if _, ok := c.Roots[name]; !ok || !validAccess(access) {
+			return fmt.Errorf("workspace_access requires a configured workspace and read-only or read-write")
 		}
 	}
 	if len(c.Capabilities) == 0 {

@@ -1,6 +1,10 @@
 # Boundaries that must stay explicit
 
-The approved target is the user's **real Windows desktop**, not a local VM. The user accepts that local information may be read. Do not quietly substitute a VM, Claude Code, or a browser-only client. That approval does not authorize routine fingerprint harvesting, credential collection or full-disk synchronization.
+The product can control the user's **real Windows desktop**, not a local VM. Actual access is determined by the user's current selection: a files-only grant is not desktop/exec authorization. Do not quietly substitute a VM, Claude Code, or a browser-only client. Deployment authorization does not authorize routine fingerprint harvesting, credential collection or full-disk synchronization.
+
+New generated configs default to `files`. `workspace_access` can narrow each existing root to `read-only`; missing entries preserve existing read/write access. Windows enforces modes on every write/move, including repeated operation IDs. MCP advertises only capabilities from authenticated live Windows policy and fails closed on unavailable or old policy responses. The localhost panel can persist modes for existing roots, with backup and external-edit checks, then pauses authorization. Root/capability changes cannot be requested remotely. Read-only file modes do not sandbox separately enabled exec/desktop capabilities.
+
+Status discovery is available to the authenticated peer while paused/expired, so Claude can learn the permitted tools without enabling a session. It includes only the documented version/session/capability fields and workspace aliases/modes. Actual Windows paths appear only in the private local panel. File content is not automatically scrubbed: identity information intentionally placed in an allowed file can still enter model context.
 
 The network permits exact Tailscale device addresses and required ports. It also needs device identity, certificate pinning and local authorization. IP alone is not authentication. Other tailnet members are untrusted. Observe IPv6 as well as IPv4; bootstrap scripts intentionally use exact IPv4, and the agent binds one explicit address.
 
