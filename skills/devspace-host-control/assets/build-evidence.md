@@ -258,3 +258,78 @@ the task's delivery report; building/testing alone does not establish those.
   Python tests and a cached rebuild from the distributed `Dockerfile.qa` recipe.
   All six runtime binaries were rebuilt after the temporary-mount correction,
   then source mirroring, hashes/architecture and release archives were refreshed.
+## Scoped image previews in the local panel — 2026-11-17
+
+- All 116 Python skill tests passed on Windows. New cases cover image content
+  versus toolbar icons, signed per-turn image IDs, navigation/removal refusal,
+  discard after capture races, bounded packets, PNG type/dimension checks,
+  corrupt-image decode rejection, and real WPF image cards/scroll viewports at
+  normal and minimum widths. The real recovery callback preserves local drafts;
+  a busy relay is distinguished from an unavailable agent. CentOS ran 46 bridge
+  and image tests successfully, with six Windows-only cases skipped.
+- The user's existing reply exposed a named SVG content image in an inline
+  frame. Its initially clipped position was rejected. During acceptance only,
+  a scoped accessibility scroll brought the whole image into view; production
+  image requests do not scroll or send keys. The verified native-window crop
+  produced a 690×470 PNG (32391 bytes), visually inspected as the landscape.
+- A real production WPF event harness recovered the existing exact-last-user
+  reply over the deployed mTLS relay, then requested and rendered one image
+  card automatically. It received 121 text characters and the 690×470 preview
+  in 11.49 seconds, with zero draft-write requests and zero submit requests.
+  Reencoding that displayed bitmap to PNG succeeded. The SaveFileDialog click
+  itself was not automated. No new model message was sent for image QA.
+- A previous local input lease remained occupied after the older panel closed.
+  Authenticated HTTP 409 identified that condition. After the user saved and
+  closed the panel, only the Windows agent was restarted, with file access
+  paused and pairing preserved. The receiver was updated separately; Claude,
+  hardware acceleration, RDP, file roots and network policy were unchanged.
+  Temporary remote image/last-turn QA files were removed. Desktop UI automation
+  was stopped when the user pressed Escape; subsequent verification used the
+  application's own WPF harness and the established administrative connection.
+- These are labeled preview screenshots of fully visible images, not original
+  SVG/file downloads. Up to four content images are scoped to one completed
+  watched reply; each PNG is at most 80000 bytes and 1024 pixels per side. No
+  arbitrary URL/file fetch, root-desktop capture, browser rendering, new MCP
+  capability or port was added. Hidden/clipped images, standalone artifact
+  sidebars, other Claude versions and Ubuntu acceptance remain outside the
+  observed live result. Shared-desktop focus/layout races remain possible.
+- Source/package/skill validation passed. Go production code and all runtime
+  binaries are unchanged; no Go rebuild was required for this Python/WPF update.
+
+## Actual Claude Desktop orchestration acceptance — 2026-11-17
+
+- Upgraded the paired Windows agent and CentOS MCP adapter from the reviewed
+  feature binaries, backing up both. Preserved exact-device network rules,
+  certificate pairing, the existing file root and files-only generic policy;
+  added only the separately configured Codex capability for the public QA repo.
+  The human explicitly authorized a local 30-minute session. Claude restarted
+  normally with an empty draft; hardware acceleration stayed enabled.
+- Actual Claude Desktop discovered and called the seven Codex tools. Its first
+  read-only project discovery timed out twice while the approval UI was outside
+  the visible viewport. No job was started by those failed attempts. A fresh
+  read-only retry succeeded after scrolling the exact approval into view and
+  granting once; permanent tool approval was not enabled.
+- Claude itself started implement job e80144aae1de4a7ca92e41e1b1ff1e0b against
+  the pinned public Hello-World commit. A real Codex model generated a six-digit
+  random visual challenge entirely inside container temporary storage and used
+  real Chromium to render its page into a 640x480 PNG. Independent inspection
+  found the challenge absent from all first-round exported text, report and patch.
+- Claude fetched that artifact as a native MCP image, read 693536, then called
+  codex_continue as job 07f006d531b1476188888541a03fb80b with the observed digits.
+  The second real Codex call preserved the original marker and appended the
+  observed code plus Desktop orchestration verified. Claude fetched and checked
+  the returned patch; independent on-disk inspection matched all three lines.
+  Both jobs completed with exit code 0 and both named containers were absent.
+- This run used no fixed test suite (tests is null); the earlier programmatic
+  exit-7/cancellation/isolation acceptance remains a separate result. This proves
+  desktop tool discovery, real delegation, native-image reading and continuation
+  for the configured synthetic public QA scenario. It does not establish arbitrary
+  project compatibility, Windows GUI control, original-file downloads from Claude
+  artifacts or local-panel display of every intermediate tool card.
+- Private job states, reports, challenge PNG, exact patch and the scoped QA
+  transcript are retained locally without account credentials in the repository.
+  See docs/claude-codex-acceptance.md for the sanitized acceptance record.
+- After merging the existing scoped-image-preview changes into this feature
+  branch, all 116 Python skill tests and all 9 Node runner tests passed again.
+  Go source/runtime hashes match the previously live-tested feature binaries;
+  no Go source was changed during this desktop acceptance.

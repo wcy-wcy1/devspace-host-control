@@ -259,3 +259,26 @@ Preserve unrelated settings. Retained job trees/reports may contain project data
 archive/delete only identified finished job directories locally. Removing a job
 also removes its idempotency record: never reuse an archived/deleted request ID.
 Revoke the dedicated Codex login separately when no longer needed.
+
+
+## Recorded desktop acceptance (2026-11-17)
+
+The deployed CentOS Claude Desktop has now completed the missing client-side
+path: tool discovery, a real Codex implementation task, native MCP image
+retrieval, visual reading of a fresh random six-digit code, a second Codex round
+instructed with that code, and patch retrieval/checking. Both rounds completed
+with exit code zero. The visual code was absent from first-round exported text.
+This is a synthetic public QA scenario, not blanket project compatibility.
+
+Claude has its own per-tool approval UI in addition to the HostControl session.
+An approved HostControl session alone does not accept that UI. In this run its
+approval card initially sat outside the visible viewport and two project-list
+calls timed out without starting work. Bring the exact card into view and
+approve the intended call; do not assume a successful accessibility action means
+permission was granted. Re-observe tool status. A safe read-only project-list
+retry is distinct from replaying an unknown codex_start: retain the original
+request ID and query job state after an uncertain start.
+
+The configured fixed QA suites were not run in this desktop test. Exit-7,
+container-boundary and cancellation checks belong to the separately recorded
+programmatic live acceptance. Keep both results distinct.
