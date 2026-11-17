@@ -54,7 +54,9 @@ Paused/expired sessions allow metadata-only status discovery, never file access.
 `host_status`, `session_info`, `fs_list`, `fs_read`, `fs_write`, `fs_move`,
 `exec_start`, `exec_poll`, `exec_cancel`, `desktop_windows`, `desktop_inspect`,
 `desktop_focus`, `desktop_capture`, `desktop_click`, `desktop_type`,
-`desktop_key`, `desktop_scroll`, `browser_open`.
+`desktop_key`, `desktop_scroll`, `browser_open`, `codex_projects`, `codex_start`,
+`codex_status`, `codex_result`, `codex_continue`, `codex_cancel`,
+`codex_artifact_get`.
 
 Each desktop input consumes a fresh, 30-second, window-bound frame. Screenshots
 are visible screen regions and may include overlapping windows. UI Automation
@@ -88,6 +90,21 @@ permissions restrict clipboard data. Arbitrary execution/desktop capabilities,
 if explicitly enabled separately, are not confined by file read-only modes.
 
 ## Boundaries
+
+Optional `codex` capability: see `references/codex-executor.md` in the accompanying
+`devspace-host-control` skill.
+It uses the existing authenticated tool transport and local session gate, but
+does not enable `exec` or `desktop`. Exact approved commits are exported to a
+dedicated Linux Docker worker; test/review sources are read-only, implementation
+uses a disposable writable snapshot and returns a patch. Results/artifacts have
+job IDs, source hashes and bounded native MCP images or embedded resources.
+The host coordinator never commits/pushes. Container model auth is a dedicated
+login visible to that isolated environment, not a secret-free execution promise.
+Start IDs persist across restart; interrupted jobs require confirmed cleanup,
+and continuations are explicit bounded new jobs, not resumed desktop threads.
+
+Runner checks: `node --test codex-runner/runner.test.mjs`. These use a fixture
+CLI, real child processes and real Git diffs without model/account access.
 
 Real desktop and arbitrary program execution run as the current Windows user,
 not in a sandbox. Workspace restrictions apply to file APIs only. Lock/UAC and

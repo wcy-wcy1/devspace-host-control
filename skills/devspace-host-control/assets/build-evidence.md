@@ -182,3 +182,33 @@ the task's delivery report; building/testing alone does not establish those.
   newest coalesced draft confirmed at 2.99 s, and final clear at 4.09 s. No Claude
   message was submitted. Source packaging/integrity checks were rerun; Go
   production code and runtime binaries were unchanged in this fix.
+
+## Opt-in Claude to Codex jobs — 2026-11-17
+
+- Feature-branch checks on Windows: `go test ./... -count=1` and `go vet ./...`
+  passed; all 9 Node runner tests and all 106 existing skill Python tests passed.
+  The Go suite includes 12 Codex-specific tests for default-off discovery,
+  validated local configuration, exact-commit Git export, argument refusal,
+  durable request IDs, bounded continuation, cancellation/restart, cleanup
+  failure, fixed container arguments and verified artifact retrieval.
+- The Git integration test used a real disposable local repository, ran actual
+  Git init/fetch/archive commands and refused a commit outside the approved ref.
+  Only that test fixture permits local file transport; production accepts fixed
+  credential-free HTTPS repositories and disables Git file/ext transports.
+- Runner tests execute real child processes through a fixture CLI, preserving
+  actual failed-test exit codes, producing a real new-file Git diff and writing
+  valid PNG bytes. They cover UTF-8 split across output chunks, bounded output,
+  timeout and malformed/oversized event refusal without model access.
+- Go integration tests replace Docker execution with a fixture. Native PNG
+  content survives the MCP JSON-RPC boundary; empty text, large escaped text,
+  ASCII PDF, hash tampering, links and oversized artifact cases are checked.
+  Fixture images are not screenshots of a running application.
+- All six runtime assets were rebuilt with portable Go 1.25.9. Source mirroring,
+  runtime hashes/architecture and release archive integrity were checked using
+  the repository packaging tools. The skill passed its quick validator.
+- The installed Docker CLI could not reach `dockerDesktopLinuxEngine` because
+  its named pipe was absent. The runner image was not built or started, no real
+  Codex login/model job ran, and actual Claude image/resource display remains
+  unverified. Docker containment/network behavior requires live acceptance.
+- No production agent, installed skill, account, file grant, session, firewall,
+  server or main-thread checkout was changed. This capability remains opt-in.

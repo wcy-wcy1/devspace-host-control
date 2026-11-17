@@ -16,6 +16,7 @@ REQUIRED_SKILL_FILES = (
     'scripts/timezone_config.py', 'references/timezone.md',
     'scripts/input_bridge.py', 'scripts/input_bridge_setup.py',
     'scripts/claude-input.ps1', 'scripts/setup-claude-input.ps1', 'references/input-bridge.md',
+    'references/codex-executor.md',
 )
 
 

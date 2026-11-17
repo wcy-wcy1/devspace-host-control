@@ -22,6 +22,7 @@
 - 🔐 **授权在本机**：查看权限和剩余时间，随时暂停；Claude 只获得本机允许的工具。
 - 📋 **文字互通**：默认双向文本剪贴板，也可以按需关闭。
 - 💬 **本地对话 · 实验性**：Windows 输入同步到远程 Claude，Enter 发送，回复直接回显到本地。
+- 🤝 **Claude 调度 Codex · 实验性**：按项目授权分派测试、审查或编码任务，取回报告、截图和文件；默认关闭。
 
 <a id="quick-start"></a>
 ## 🚀 快速开始
@@ -109,6 +110,24 @@ Codex 会执行安装、策略配置、证书配对和 MCP 配置。首次使用
 
 配置与验证见 [本地输入框指南](skills/devspace-host-control/references/input-bridge.md)。
 
+## 🤝 Claude 负责思考，Codex 接手执行
+
+让服务器上的 Claude 拆解需求，再通过 MCP 把任务交给独立的 Codex 执行器：
+
+```text
+Claude 分派任务 → 按提交编号准备代码 → 容器内 Codex 执行
+       ↑                                  ↓
+继续分析与修复 ← 测试结论 / 变更补丁 / 截图与文件
+```
+
+本地明确批准项目、分支、任务类型与测试方案。**测试**返回实际退出码，**审查**读取代码给出分析，**编码**修改独立副本并返回补丁。编码任务完成不代表测试通过；每份结果标明实际源提交，便于 Claude 继续判断。
+
+图片按需以 **MCP 图片内容**返回，文字、日志、PDF 等作为登记附件取回，不需要公开图床。稳定任务 ID 防止重复启动；暂停授权会取消任务，重启后不重跑未知结果。可显式追加下一轮，默认最多三轮。
+
+> 这是一项单独启用的 `codex` 能力，保留默认文件权限；无需开放通用命令或桌面控制。执行器需要 Docker **Linux 容器**、固定镜像和独立 Codex 登录，不接管现有桌面聊天。当前支持公开 HTTPS 仓库，不自动提交、推送或合并。容器内可访问其专用模型凭据和联网服务，不承诺匿名或日志自动脱敏。真实账号、容器与 Claude 看图仍须部署联调。
+
+配置、边界与验收步骤见 [Claude → Codex 任务执行指南](skills/devspace-host-control/references/codex-executor.md)。
+
 <a id="mcp-tools"></a>
 ## 🧰 MCP 工具
 
@@ -122,8 +141,9 @@ Codex 会执行安装、策略配置、证书配对和 MCP 配置。首次使用
 | **桌面观察** | `desktop_windows` · `desktop_inspect` · `desktop_capture` | 单独开启 `desktop` |
 | **鼠标键盘** | `desktop_focus` · `desktop_click` · `desktop_type` · `desktop_key` · `desktop_scroll` | 单独开启 `desktop` |
 | **打开网页** | `browser_open` | 单独开启 `desktop` |
+| **Codex 协作** | `codex_projects` · `codex_start` · `codex_status` · `codex_result` · `codex_continue` · `codex_cancel` · `codex_artifact_get` | 单独配置并开启 `codex` |
 
-目录全部只读时，清单只保留状态查询、`fs_list` 和 `fs_read`。即使客户端缓存了旧清单，每次调用仍由 Windows 重新检查权限。
+在默认仅文件能力下，目录全部只读时，清单只保留状态查询、`fs_list` 和 `fs_read`。即使客户端缓存了旧清单，每次调用仍由 Windows 重新检查权限。
 
 <a id="architecture"></a>
 ## 📐 工作原理

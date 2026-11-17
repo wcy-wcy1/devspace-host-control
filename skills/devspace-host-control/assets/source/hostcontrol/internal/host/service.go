@@ -19,10 +19,17 @@ import (
 )
 
 type Content struct {
-	Type     string `json:"type"`
-	Text     string `json:"text,omitempty"`
-	Data     string `json:"data,omitempty"`
-	MimeType string `json:"mimeType,omitempty"`
+	Type     string            `json:"type"`
+	Text     string            `json:"text,omitempty"`
+	Data     string            `json:"data,omitempty"`
+	MimeType string            `json:"mimeType,omitempty"`
+	Resource *EmbeddedResource `json:"resource,omitempty"`
+}
+type EmbeddedResource struct {
+	URI      string  `json:"uri"`
+	MimeType string  `json:"mimeType"`
+	Text     *string `json:"text,omitempty"`
+	Blob     string  `json:"blob,omitempty"`
 }
 type Result struct {
 	Content []Content `json:"content"`
@@ -68,10 +75,21 @@ type Service struct {
 	configPath string
 	configHash [32]byte
 	input      *inputRelay
+	codex      *codexManager
 }
 
 func NewService(c Config) (*Service, error) {
 	s := &Service{cfg: c, cache: map[string]cached{}, tasks: map[string]*Task{}}
+	if err := validateCodexConfig(&c); err != nil {
+		return nil, err
+	}
+	if c.Has("codex") {
+		manager, err := newCodexManager(*c.Codex)
+		if err != nil {
+			return nil, err
+		}
+		s.codex = manager
+	}
 	if c.InputRelayState != "" {
 		s.input = newInputRelay()
 	}
@@ -119,6 +137,9 @@ func (s *Service) Pause(revoke bool) error {
 		s.input.close()
 	}
 	s.CancelTasks("session ended")
+	if s.codex != nil {
+		s.codex.cancelAll("session ended")
+	}
 	if revoke {
 		if e := writeNew(s.revocationPath(), []byte("revoked\n")); e != nil && !os.IsExist(e) {
 			return fmt.Errorf("paused but persistent revocation failed; stop agent and remove client authorization")
@@ -147,6 +168,9 @@ func (s *Service) Watch(stop <-chan struct{}) {
 			s.callMu.Lock()
 			if !s.active() {
 				s.CancelTasks("session expired")
+				if s.codex != nil {
+					s.codex.cancelAll("session expired")
+				}
 			}
 			s.callMu.Unlock()
 		}
@@ -159,6 +183,8 @@ func capability(name string) string {
 		return "files"
 	case strings.HasPrefix(name, "exec_"):
 		return "exec"
+	case strings.HasPrefix(name, "codex_"):
+		return "codex"
 	case strings.HasPrefix(name, "desktop_") || name == "browser_open":
 		return "desktop"
 	}
@@ -223,6 +249,12 @@ func (s *Service) Call(c Call) Result {
 		v, e = s.fileCall(c.Name, c.Arguments)
 	case c.Name == "exec_start" || c.Name == "exec_poll" || c.Name == "exec_cancel":
 		v, e = s.taskCall(c.Name, c.Arguments)
+	case cap == "codex":
+		if s.codex == nil {
+			e = fmt.Errorf("Codex executor is not configured locally")
+		} else {
+			result, e = s.codex.call(c.Name, c.Arguments)
+		}
 	case cap == "desktop":
 		result, e = s.desktopCall(c.Name, c.Arguments)
 	default:

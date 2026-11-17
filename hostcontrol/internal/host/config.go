@@ -28,6 +28,7 @@ type Config struct {
 	SessionMinutes  int               `json:"session_minutes"`
 	Audit           string            `json:"audit,omitempty"`
 	InputRelayState string            `json:"input_relay_state,omitempty"`
+	Codex           *CodexConfig      `json:"codex,omitempty"`
 }
 
 type ClientConfig struct {
@@ -81,6 +82,9 @@ func validFingerprint(s string) bool {
 }
 
 func (c *Config) Validate() error {
+	if err := validateCodexConfig(c); err != nil {
+		return err
+	}
 	if c.InputRelayState != "" {
 		if !filepath.IsAbs(c.InputRelayState) {
 			return fmt.Errorf("input_relay_state must be an absolute private path")
@@ -126,7 +130,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("capabilities must be explicit")
 	}
 	for _, s := range c.Capabilities {
-		if s != "files" && s != "exec" && s != "desktop" {
+		if s != "files" && s != "exec" && s != "desktop" && s != "codex" {
 			return fmt.Errorf("unknown capability %q", s)
 		}
 	}

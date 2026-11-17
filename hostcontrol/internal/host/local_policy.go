@@ -100,6 +100,9 @@ func (s *Service) setWorkspaceAccess(name, access string) error {
 	s.cfg.WorkspaceAccess, s.configHash = next.WorkspaceAccess, sha256.Sum256(data)
 	s.deadline = time.Time{} // Applying a mode always requires a new local session.
 	s.CancelTasks("workspace permissions changed")
+	if s.codex != nil {
+		s.codex.cancelAll("workspace permissions changed")
+	}
 	return nil
 }
 

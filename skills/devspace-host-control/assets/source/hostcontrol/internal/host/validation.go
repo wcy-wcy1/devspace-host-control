@@ -55,7 +55,7 @@ func validateArguments(name string, a map[string]any) error {
 }
 
 func readOnlyTool(name string) bool {
-	return name == "host_status" || name == "session_info" || name == "fs_read" || name == "fs_list" || name == "exec_poll" || name == "desktop_capture" || name == "desktop_windows" || name == "desktop_inspect"
+	return name == "host_status" || name == "session_info" || name == "fs_read" || name == "fs_list" || name == "exec_poll" || name == "desktop_capture" || name == "desktop_windows" || name == "desktop_inspect" || name == "codex_projects" || name == "codex_status" || name == "codex_result" || name == "codex_artifact_get"
 }
 func validToolName(name string) bool {
 	if len(name) > 64 {

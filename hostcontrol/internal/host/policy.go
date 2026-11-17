@@ -70,7 +70,7 @@ func discoverPolicy(call Caller) (remotePolicy, Result, error) {
 	}
 	seen := map[string]bool{}
 	for _, cap := range policy.Capabilities {
-		if seen[cap] || cap != "files" && cap != "exec" && cap != "desktop" {
+		if seen[cap] || cap != "files" && cap != "exec" && cap != "desktop" && cap != "codex" {
 			return policy, Result{}, fmt.Errorf("host policy invalid; access denied")
 		}
 		seen[cap] = true
