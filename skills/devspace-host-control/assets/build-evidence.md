@@ -112,3 +112,46 @@ the task's delivery report; building/testing alone does not establish those.
   other Claude versions and Ubuntu desktop acceptance remain unverified.
   Reply snapshots contain plain text only, up to 24000 characters; they do not
   establish complete Markdown/image/history mirroring or API streaming.
+
+
+## Low-latency relay, reply recovery and panel design — 2026-11-17
+
+- All 103 skill Python tests passed on Windows. All 36 bridge tests ran on
+  CentOS, with three Windows-only cases skipped. New cases cover read-only
+  exact-last-turn recovery, no resend, zero-debounce/IME gating, pinned relay
+  endpoints, guarded PRIMARY paste, asynchronous text readback, pointer mismatch
+  refusal and retrying only read-only transient accessibility snapshots.
+- `go test ./... -count=1` and `go vet ./...` passed. Relay tests cover local
+  bearer/lease separation, expiry, bounds, one outstanding packet, claimed
+  delivery without replay, exact result tickets, default opt-out, the existing
+  source/certificate gate, revocation, DPAPI state and refusal to use the input
+  bearer to enable Windows file tools. All six runtime assets were rebuilt with
+  the portable Go 1.25.9 toolchain from the changed production source.
+- The actual deployed WPF panel and CentOS Claude exchanged Chinese/multiline/
+  emoji drafts over the existing outbound mTLS port. The final production run
+  queued its first request 422 ms after window initialization, confirmed the
+  newest of two coalesced edits at 5.44 s, and cleared the remote draft at 7.44 s.
+  Its Windows clipboard marker remained unchanged. The transport has zero
+  application debounce; these are measured round trips, not per-keystroke or
+  zero-latency promises. Linux PRIMARY remains shared with other Linux apps.
+- New empty conversations were opened without restarting the receiver. Two
+  subsequent explicit Enter fixtures each produced one submit request, the real
+  matching Claude response and local clearing after acceptance, in 8.1 s and
+  8.9 s. Recovery of the preceding completed fixture took 3.6 s, sent no submit,
+  retained the local source text and left draft synchronization paused.
+- Investigation also observed fail-closed unknown outcomes and one changed
+  clipboard marker during a concurrent desktop run. No unknown submission was
+  replayed; remote state was read to confirm acceptance. Do not promise reliable
+  input amid concurrent manual remote actions, clipboard-manager PRIMARY/CLIPBOARD
+  synchronization, arbitrary application versions or focus changes.
+- The actual final XAML was rendered and visually inspected. A layout harness
+  checked normal and minimum window sizes, long replies, wrapping status text
+  and nonoverlapping controls. WPF callback checks also covered queued-send
+  cancellation, draft preservation, reconnect and copy/pause unlocking.
+  The README image is a real-XAML preview, not a live model-response screenshot.
+- Windows agent, Linux receiver and local launch files were upgraded with pairing
+  preserved. Production policy was read back as files-only, with only the
+  previously approved root. No MCP exec/desktop capability, firewall grant,
+  public port or GPU setting was added. Temporary metadata-only diagnostics were
+  removed and the normal receiver restored. Actual OS IME and Ubuntu acceptance
+  remain unverified.

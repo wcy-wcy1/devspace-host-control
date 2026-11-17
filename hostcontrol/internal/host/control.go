@@ -25,6 +25,10 @@ func (s *Service) StartControl() (string, error) {
 	}
 	token := randomID() + randomID()
 	origin := "http://" + l.Addr().String()
+	if e := s.writeInputEndpoint(origin); e != nil {
+		l.Close()
+		return "", e
+	}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -36,6 +40,17 @@ func (s *Service) StartControl() (string, error) {
 		if r.URL.Path == "/" && r.Method == "GET" {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			fmt.Fprint(w, controlHTML)
+			return
+		}
+		if r.URL.Path == "/input-relay" && s.input != nil {
+			s.mu.Lock()
+			blocked := s.revoked
+			s.mu.Unlock()
+			if blocked {
+				http.Error(w, "pairing revoked", 403)
+				return
+			}
+			s.input.local(w, r)
 			return
 		}
 		if r.Method != "POST" || subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+token)) != 1 {

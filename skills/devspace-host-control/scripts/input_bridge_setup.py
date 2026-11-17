@@ -12,7 +12,7 @@ from launcher import desktop_entry
 SCRIPTS = Path(__file__).resolve().parent
 
 
-def configure(username, key=None, apply=False):
+def configure(username, key=None, apply=False, relay_client_config=None):
     import pwd
     account = pwd.getpwnam(username)
     home = Path(account.pw_dir)
@@ -38,9 +38,15 @@ def configure(username, key=None, apply=False):
     body = desktop_entry(helper).replace('HostControl Claude Desktop', 'HostControl Claude input bridge')
     body = body.replace('Start Claude in the paired remote desktop', 'Receive explicitly paired local draft text')
     body = body.replace(str(helper) + '"', str(helper) + '" receive')
-    config_bytes = (json.dumps({'key': key.hex()}) + '\n').encode()
-    if config.exists() and json.loads(config.read_text()) != json.loads(config_bytes):
+    payload = json.loads(config.read_text()) if config.exists() else {'key': key.hex()}
+    if payload.get('key') != key.hex():
         raise ValueError('Existing pairing differs; preserve it or explicitly remove it before re-pairing')
+    if relay_client_config:
+        client = Path(relay_client_config)
+        if not client.is_absolute() or client.is_symlink() or client.stat().st_uid != account.pw_uid or client.stat().st_mode & 0o077:
+            raise ValueError('Use the desktop user private paired MCP client configuration')
+        payload['relay_client_config'] = str(client)
+    config_bytes = (json.dumps(payload) + '\n').encode()
     for p, data in ((config, config_bytes), (helper, (SCRIPTS / 'input_bridge.py').read_bytes()),
                     (entry, body.encode())):
         if p.is_symlink() or (p.exists() and p.stat().st_uid != account.pw_uid):
@@ -60,10 +66,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--desktop-user', required=True)
     parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--relay-client-config')
     args = parser.parse_args()
     try:
         key = bytes.fromhex(sys.stdin.readline().strip()) if args.apply else None
-        print(json.dumps(configure(args.desktop_user, key, args.apply), indent=2))
+        print(json.dumps(configure(args.desktop_user, key, args.apply, args.relay_client_config), indent=2))
     except (ValueError, OSError, KeyError) as error:
         print('Input receiver setup: ' + str(error), file=sys.stderr)
         sys.exit(1)

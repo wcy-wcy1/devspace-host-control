@@ -27,6 +27,7 @@ type Config struct {
 	Capabilities    []string          `json:"capabilities"`
 	SessionMinutes  int               `json:"session_minutes"`
 	Audit           string            `json:"audit,omitempty"`
+	InputRelayState string            `json:"input_relay_state,omitempty"`
 }
 
 type ClientConfig struct {
@@ -80,6 +81,17 @@ func validFingerprint(s string) bool {
 }
 
 func (c *Config) Validate() error {
+	if c.InputRelayState != "" {
+		if !filepath.IsAbs(c.InputRelayState) {
+			return fmt.Errorf("input_relay_state must be an absolute private path")
+		}
+		for _, root := range c.Roots {
+			rel, e := filepath.Rel(root, c.InputRelayState)
+			if e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				return fmt.Errorf("input relay state must be outside file workspaces")
+			}
+		}
+	}
 	ip, port, err := net.SplitHostPort(c.Listen)
 	if err != nil || port == "" || !IsVPN(ip) || !IsVPN(c.PeerIP) {
 		return fmt.Errorf("listen and peer_ip must be exact Tailscale addresses (not wildcards, DNS names, or CIDRs)")

@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 import input_bridge as bridge
 import claude_session
@@ -135,6 +136,80 @@ class SyncTests(unittest.TestCase):
 
 
 class ChatTests(unittest.TestCase):
+    def test_primary_input_replaces_only_owned_text_without_clipboard_or_return(self):
+        class Node:
+            def get_application(self): return self
+            def get_process_id(self): return 42
+        stored, selection, calls = ['old'], [''], []
+        def run(command):
+            calls.append(command)
+            if command[1] == 'getwindowfocus': return '123'
+            if command[1] == 'getwindowpid': return '42'
+            if command[1] == 'getmouselocation': return 'X=10\nY=20'
+            if command[-1] == 'BackSpace': stored[0] = ''
+            if command[1] == 'click': stored[0] = selection[0]
+            return ''
+        def publish(text):
+            self.assertEqual(stored[0], '')
+            selection[0] = text
+        text = '中文\nemoji 😀'
+        self.assertTrue(bridge.paste_primary_prompt(Node(), text, 'old', run,
+            lambda n: stored[0], lambda n: True, publish, lambda n: (10, 20)))
+        self.assertEqual(stored[0], text)
+        self.assertFalse(any('--sync' in call for call in calls))
+        self.assertFalse(any('ctrl+v' in call or 'Return' in call for call in calls))
+        self.assertFalse(bridge.paste_primary_prompt(Node(), 'other', 'wrong', run,
+            lambda n: stored[0], lambda n: True, publish, lambda n: (10, 20)))
+        self.assertEqual(stored[0], text)
+    def test_primary_waits_for_async_delete_and_checks_pointer_before_paste(self):
+        class Node:
+            def get_application(self): return self
+            def get_process_id(self): return 42
+        stored, selection, pending, calls = ['old'], [''], [0], []
+        def run(command):
+            calls.append(command)
+            if command[1] == 'getwindowfocus': return '123'
+            if command[1] == 'getwindowpid': return '42'
+            if command[1] == 'getmouselocation': return 'X=10\nY=20'
+            if command[-1] == 'BackSpace': pending[0] = 2
+            if command[1] == 'click': stored[0] = selection[0]
+            return ''
+        def read(node):
+            if pending[0]:
+                pending[0] -= 1
+                if not pending[0]: stored[0] = ''
+            return stored[0]
+        with mock.patch.object(bridge.time, 'sleep'):
+            self.assertTrue(bridge.paste_primary_prompt(Node(), 'new', 'old', run,
+                read, lambda n: True, lambda t: selection.__setitem__(0, t), lambda n: (10, 20)))
+        self.assertEqual(sum(c[-1] == 'BackSpace' for c in calls), 1)
+        self.assertEqual(sum(c[1] == 'click' for c in calls), 1)
+        calls.clear()
+        stored[0] = ''
+        self.assertFalse(bridge.paste_primary_prompt(Node(), 'new', '', run,
+            read, lambda n: True, lambda t: None, lambda n: (99, 20)))
+        self.assertFalse(any(c[1] == 'click' for c in calls))
+
+    def test_relay_client_keeps_vpn_tls_pin_and_does_not_accept_a_changed_certificate(self):
+        payload = dict(endpoint='https://100.80.0.1:7443', ca='ca', cert='cert', key='key', server_fingerprint='a' * 64)
+        class PrivatePath:
+            def is_symlink(self): return False
+            def stat(self): return type('Stat', (), dict(st_uid=1000, st_mode=0o600))()
+            def read_text(self): return json.dumps(payload)
+        with mock.patch.object(bridge, 'Path', return_value=PrivatePath()), mock.patch.object(bridge.os, 'getuid', return_value=1000, create=True), mock.patch.object(bridge.ssl, 'create_default_context') as context:
+            for endpoint in ('http://100.80.0.1', 'https://example.com', 'https://192.168.1.1', 'https://100.80.0.1/other', 'https://user:pass@100.80.0.1'):
+                payload['endpoint'] = endpoint
+                with self.assertRaises(ValueError): bridge.RelayClient('private')
+            context.assert_not_called()
+            payload['endpoint'] = 'https://100.80.0.1:7443'
+            client = bridge.RelayClient('private')
+            connection = mock.Mock()
+            connection.sock.getpeercert.return_value = b'unexpected certificate'
+            with mock.patch.object(bridge.http.client, 'HTTPSConnection', return_value=connection):
+                with self.assertRaises(ValueError): client.exchange({})
+            connection.close.assert_called_once()
+            connection.request.assert_not_called()
+
     def test_explicit_submit_requires_exact_owned_revision_and_is_not_repeated(self):
         node, storage, enters = object(), [''], []
         def write(n, text, expected):
@@ -228,6 +303,27 @@ class ChatTests(unittest.TestCase):
         view['panel'] = object()
         self.assertEqual(watch.poll(poll), {'status': 'changed'})
 
+    def test_reply_snapshot_change_waits_without_resubmitting_or_inferring_acceptance(self):
+        node, panel, anchor, reply = (object() for _ in range(4))
+        view = {'panel': panel, 'busy': False, 'turns': []}
+        reads, submits = [0], []
+        def snapshot(n):
+            reads[0] += 1
+            if reads[0] == 2:
+                raise ValueError('Transcript changed during traversal')
+            return view
+        watch = bridge.ReplyWatch(lambda: [node], snapshot,
+                                  lambda *a: submits.append(a) or True)
+        message = dict(sync_message('hello', 2, 'hello'), kind='submit')
+        self.assertTrue(watch.dispatch(node, 'hello', message))
+        poll = dict(stream=message['stream'], turn=message['id'])
+        self.assertEqual(watch.poll(poll), {'status': 'waiting', 'accepted': False})
+        self.assertIsNone(watch.watch['anchor'])
+        view['turns'] = [dict(node=anchor, author='user', text='hello'),
+                         dict(node=reply, author='claude', text='reply', complete=True, truncated=False)]
+        self.assertEqual(watch.poll(poll)['text'], 'reply')
+        self.assertEqual(len(submits), 1)
+
     def test_busy_or_later_user_turn_is_never_treated_as_our_reply(self):
         node, panel, anchor = object(), object(), object()
         view = {'panel': panel, 'busy': True, 'turns': []}
@@ -241,6 +337,44 @@ class ChatTests(unittest.TestCase):
         view['turns'] = [dict(node=anchor, author='user', text='hello'),
                          dict(node=object(), author='user', text='another conversation turn')]
         self.assertEqual(watch.poll(dict(stream=message['stream'], turn=message['id'])), {'status': 'changed'})
+
+    def test_reply_recovery_is_read_only_and_requires_exact_latest_user_text(self):
+        node, panel, anchor, reply = (object() for _ in range(4))
+        view = {'panel': panel, 'busy': False, 'turns': [
+            dict(node=anchor, author='user', text='nh'),
+            dict(node=reply, author='claude', text='Hey!', complete=True, truncated=False)]}
+        submits = []
+        watch = bridge.ReplyWatch(lambda: [node], lambda n: view, lambda *a: submits.append(a))
+        message = dict(kind='recover', id=IDENTIFIER, stream='b' * 32, text='nh')
+        result = watch.recover(message)
+        self.assertEqual(result, dict(status='complete', accepted=True, text='Hey!', truncated=False))
+        self.assertEqual(submits, [])
+        self.assertEqual(watch.recover(dict(message, text='other')), {'status': 'conflict'})
+        view['turns'].append(dict(node=object(), author='user', text='new turn'))
+        self.assertEqual(watch.recover(message), {'status': 'conflict'})
+        self.assertEqual(watch.poll(dict(stream='b' * 32, turn=IDENTIFIER)), {'status': 'changed'})
+
+    def test_recovery_protocol_never_calls_sync_or_fill_or_claims_clipboard_text(self):
+        message = dict(kind='recover', id=IDENTIFIER, at=int(time.time()), stream='b' * 32, text='nh')
+        raw = bridge.packet(KEY, message, bridge.CHAT_PREFIX)
+        self.assertEqual(bridge.unpack(KEY, raw), message)
+        for invalid in (dict(message, text=''), dict(message, text='x' * 4001), dict(message, stream='../')):
+            with self.assertRaises(ValueError):
+                bridge.unpack(KEY, bridge.packet(KEY, invalid, bridge.CHAT_PREFIX))
+        with self.assertRaises(ValueError):
+            bridge.unpack(KEY, bridge.packet(KEY, message, bridge.SYNC_PREFIX))
+        class Replies:
+            def recover(self, value):
+                return dict(status='complete', accepted=True, text='reply', truncated=False)
+        with tempfile.TemporaryDirectory() as directory:
+            def forbidden(*args):
+                self.fail('Recovery must never call draft input or submit')
+            receiver = bridge.Receiver(KEY, Path(directory) / 'seen.json', forbidden, forbidden, Replies())
+            result = receiver.receive(raw)
+            outer = json.loads(base64.b64decode(result[len(bridge.CHAT_PREFIX):]))
+            self.assertEqual(json.loads(base64.b64decode(outer['body']))['text'], 'reply')
+            self.assertIsNone(receiver.last_text)
+            self.assertIsNone(receiver.receive(raw))
 
     def test_message_body_omits_controls_summaries_and_bounds_large_output(self):
         class Node:
@@ -512,6 +646,7 @@ class BridgeTests(unittest.TestCase):
                 "$key=[byte[]](0..31)\n"
                 "New-BridgePacket $key ('a'*32) 'latest' ('b'*32) 2 (Get-DraftHash 'latest') 'submit'\n"
                 "New-BridgePacket $key ('c'*32) '' ('b'*32) 0 '' 'poll' ('a'*32)\n"
+                "New-BridgePacket $key ('d'*32) 'nh' ('b'*32) 0 '' 'recover'\n"
                 "(Read-ChatResult $key ('a'*32) '" + ack + "').text\n"
                 "Read-ChatResult $key ('b'*32) '" + ack + "'\n"
                 "$now=[DateTime]::UtcNow\n"
@@ -525,13 +660,17 @@ class BridgeTests(unittest.TestCase):
                 "Get-EnterAction $true $false $false\n"
                 "Get-EnterAction $false $true $false\n"
                 "Get-EnterAction $false $false $true\n")
+        code += ("$s.pending=$null; $s.sendWanted=$false; $s.confirmed='older'; $s.changed=$now; $s.inputDelayMs=0\n"
+                 "Get-SyncDecision $s 'latest' $now\n"
+                 "$s.composing=$true\nGet-SyncDecision $s 'latest' $now\n")
         result = subprocess.run(['powershell.exe', '-NoProfile', '-EncodedCommand',
                                  base64.b64encode(code.encode('utf-16-le')).decode()],
                                 capture_output=True, text=True, timeout=20, check=True)
         lines = result.stdout.strip().splitlines()
         self.assertEqual(bridge.unpack(KEY, lines[0])['kind'], 'submit')
         self.assertEqual(bridge.unpack(KEY, lines[1])['kind'], 'poll')
-        self.assertEqual(lines[2:], ['reply', 'send', 'submit', 'wait', 'submit', 'newline', 'ime', 'ignore'])
+        self.assertEqual(bridge.unpack(KEY, lines[2])['kind'], 'recover')
+        self.assertEqual(lines[3:], ['reply', 'send', 'submit', 'wait', 'submit', 'newline', 'ime', 'ignore', 'send', 'wait'])
 
 
 if __name__ == '__main__':

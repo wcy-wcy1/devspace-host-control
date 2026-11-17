@@ -11,6 +11,10 @@ import re
 import subprocess
 import sys
 import time
+import http.client
+import ipaddress
+import ssl
+from urllib.parse import urlsplit
 
 PREFIX = 'HC-DRAFT/1 '
 SYNC_PREFIX = 'HC-DRAFT/2 '
@@ -50,13 +54,16 @@ def unpack(key, raw, now=None):
         raise ValueError('Invalid message ID')
     sync = prefix in (SYNC_PREFIX, CHAT_PREFIX)
     kind = value.get('kind')
-    if prefix == CHAT_PREFIX and kind == 'poll':
-        if not re.fullmatch('[a-f0-9]{32}', value.get('turn', '')) or not re.fullmatch('[a-f0-9]{32}', value.get('stream', '')):
+    if prefix == CHAT_PREFIX and kind in ('poll', 'recover'):
+        if not re.fullmatch('[a-f0-9]{32}', value.get('stream', '')):
             raise ValueError('Invalid reply watch')
-        return value
-    if kind != ('submit' if prefix == CHAT_PREFIX else 'sync' if sync else 'draft'):
+        if kind == 'poll':
+            if not re.fullmatch('[a-f0-9]{32}', value.get('turn', '')):
+                raise ValueError('Invalid reply watch')
+            return value
+    elif kind != ('submit' if prefix == CHAT_PREFIX else 'sync' if sync else 'draft'):
         raise ValueError('Not a draft')
-    if sync and (not re.fullmatch('[a-f0-9]{32}', value.get('stream', ''))
+    if sync and kind != 'recover' and (not re.fullmatch('[a-f0-9]{32}', value.get('stream', ''))
                  or not isinstance(value.get('seq'), int) or isinstance(value['seq'], bool)
                  or not 1 <= value['seq'] <= 2147483647
                  or not re.fullmatch('[a-f0-9]{64}', value.get('base', ''))):
@@ -65,7 +72,7 @@ def unpack(key, raw, now=None):
     if (not isinstance(text, str) or (not sync and not text.strip()) or len(text) > MAX_TEXT
             or any((ord(c) < 32 and c not in '\r\n\t') or 0xD800 <= ord(c) <= 0xDFFF for c in text)):
         raise ValueError('Invalid text')
-    if kind == 'submit' and not text.strip():
+    if kind in ('submit', 'recover') and not text.strip():
         raise ValueError('Cannot submit an empty draft')
     return value
 
@@ -113,6 +120,8 @@ def prompt_usable(item, Atspi):
 
 def valid_atspi_prompt(item):
     from gi.repository import Atspi
+    refresh_accessibility()
+    item.clear_cache()
     return claude_pid(item.get_application().get_process_id()) and prompt_usable(item, Atspi)
 
 
@@ -235,6 +244,76 @@ def submit_prompt(node, text, runner=desktop_command, read=accessible_text,
     return True  # Dispatched once; confirmation is handled separately.
 
 
+def primary_write(text):
+    subprocess.run(['xclip', '-selection', 'primary', '-in', '-target', 'UTF8_STRING'],
+                   input=text.encode('utf-8'), stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL, timeout=2, check=True)
+
+
+def prompt_point(node):
+    from gi.repository import Atspi
+    rect = node.get_component_iface().get_extents(Atspi.CoordType.SCREEN)
+    if rect.width < 40 or rect.height < 16:
+        raise ValueError('Prompt geometry is unavailable')
+    return rect.x + 20, rect.y + min(20, rect.height // 2)
+
+
+def paste_primary_prompt(node, text, expected='', runner=desktop_command,
+                         read=accessible_text, focused=editor_focused,
+                         write_selection=primary_write, point=prompt_point):
+    """Linux PRIMARY paste avoids the RDP CLIPBOARD selection entirely."""
+    window = runner(['xdotool', 'getwindowfocus'])
+    if not window.isdigit() or runner(['xdotool', 'getwindowpid', window]) != str(node.get_application().get_process_id()):
+        return False
+    def matches(value):
+        return focused(node) and read(node) == value and runner(['xdotool', 'getwindowfocus']) == window
+    def wait_for(value):
+        # XTEST completion precedes Chromium's accessible-text update. Wait
+        # for readback without replaying the key or touching another editor.
+        for _ in range(15):
+            if not focused(node) or runner(['xdotool', 'getwindowfocus']) != window:
+                return False
+            if read(node) == value:
+                return True
+            time.sleep(0.03)
+        return False
+    if not matches(expected):
+        return False
+    if expected:
+        runner(['xdotool', 'key', '--clearmodifiers', 'ctrl+a'])
+        if not matches(expected):
+            return False
+        runner(['xdotool', 'key', '--clearmodifiers', 'BackSpace'])
+        if not wait_for(''):
+            return False
+    if text:
+        # Selecting text can change PRIMARY; publish only after clearing our
+        # verified owned revision. Middle paste never synthesizes Return.
+        write_selection(text)
+        x, y = point(node)
+        if not matches(''):
+            return False
+        # --sync waits for a motion event even when the pointer is already at
+        # this position. Read back coordinates instead of stalling each edit.
+        runner(['xdotool', 'mousemove', str(x), str(y)])
+        location = dict(line.split('=', 1) for line in
+                        runner(['xdotool', 'getmouselocation', '--shell']).splitlines() if '=' in line)
+        if location.get('X') != str(x) or location.get('Y') != str(y) or not matches(''):
+            return False
+        runner(['xdotool', 'click', '2'])
+    return wait_for(text)
+
+
+def refresh_accessibility():
+    # This receiver has a transport loop rather than Atspi.event_main().
+    from gi.repository import GLib
+    context = GLib.MainContext.default()
+    for _ in range(100):
+        if not context.pending():
+            break
+        context.iteration(False)
+
+
 def atspi_tools():
     import gi
     gi.require_version('Atspi', '2.0')
@@ -242,8 +321,16 @@ def atspi_tools():
     # Bound D-Bus calls instead of hanging on a dead application.
     Atspi.set_timeout(1500, 3000)
     def find():
-        return candidates(Atspi.get_desktop(0), Atspi)
+        refresh_accessibility()
+        desktop = Atspi.get_desktop(0)
+        for index in range(desktop.get_child_count()):
+            app = desktop.get_child_at_index(index)
+            if claude_pid(app.get_process_id()):
+                app.clear_cache()
+        return candidates(desktop, Atspi)
     def read(node):
+        refresh_accessibility()
+        node.clear_cache()
         return accessible_text(node)
     def focus(node):
         pid = str(node.get_application().get_process_id())
@@ -419,6 +506,11 @@ def conversation_view(prompt):
     if not claude_pid(app.get_process_id()):
         raise ValueError('Not the paired Claude application')
     from gi.repository import Atspi
+    # This receiver uses a clipboard loop, not Atspi's event_main(). Process
+    # queued D-Bus events and invalidate structural caches before a snapshot.
+    # Otherwise a long-lived receiver can keep seeing the pre-reply children.
+    refresh_accessibility()
+    app.clear_cache()
     nodes = list(walk_ui(app))
     panels = [n for n in nodes if n.get_role_name() == 'panel' and n.get_name() in CHAT_LABELS
               and n.get_state_set().contains(Atspi.StateType.SHOWING)]
@@ -466,14 +558,35 @@ class ReplyWatch:
                       'before': [t['node'] for t in before['turns']], 'anchor': None, 'panel': None}
         return self.submit(node, text)
 
+    def recover(self, message):
+        """Explicit read-only recovery, scoped to the current last user turn."""
+        nodes = self.find()
+        if len(nodes) != 1:
+            return {'status': 'not_ready'}
+        view = self.read_view(nodes[0])
+        users = [t for t in view['turns'] if t['author'] == 'user']
+        if not users or users[-1]['text'] != message['text']:
+            return {'status': 'conflict'}
+        self.watch = {'stream': message['stream'], 'turn': message['id'],
+                      'text': message['text'], 'before': [],
+                      'anchor': users[-1]['node'], 'panel': view['panel']}
+        return self.poll({'stream': message['stream'], 'turn': message['id']})
+
     def poll(self, message):
         watch = self.watch
         if not watch or message['stream'] != watch['stream'] or message['turn'] != watch['turn']:
             return {'status': 'not_ready'}
-        nodes = self.find()
-        if len(nodes) != 1:
-            return {'status': 'not_ready'}
-        view = self.read_view(nodes[0]); turns = view['turns']
+        try:
+            nodes = self.find()
+            if len(nodes) != 1:
+                return {'status': 'not_ready'}
+            view = self.read_view(nodes[0])
+        except Exception:
+            # A streaming accessibility tree can change during a read-only
+            # snapshot. Read again with a fresh request; never retry UI input,
+            # infer acceptance or publish an ambiguous transcript.
+            return {'status': 'waiting', 'accepted': False}
+        turns = view['turns']
         matches = [i for i, t in enumerate(turns) if t['author'] == 'user' and t['text'] == watch['text']
                    and t['node'] not in watch['before']]
         if watch['anchor'] is None:
@@ -510,7 +623,7 @@ class Receiver:
         if identifier in self.seen:
             return None  # Includes attempts with an unknown outcome; never replay.
         self.seen = (self.seen + [identifier])[-4096:]
-        self.last_text = message.get('text')
+        self.last_text = message.get('text') if message['kind'] in ('draft', 'sync') else None
         temporary = self.state.with_suffix('.tmp')
         with temporary.open('w', encoding='utf-8') as stream:
             os.chmod(temporary, 0o600)
@@ -521,17 +634,85 @@ class Receiver:
         try:
             if message['kind'] == 'poll':
                 result = self.replies.poll(message) if self.replies else {'status': 'not_ready'}
+            elif message['kind'] == 'recover':
+                result = self.replies.recover(message) if self.replies else {'status': 'not_ready'}
             else:
                 status = (self.sync.apply(message) if self.sync else 'not_ready') if message['kind'] in ('sync', 'submit') else self.fill(message['text'])
                 result = {'status': status}
         except Exception:
             result = {'status': 'uncertain'}
-        if message['kind'] in ('submit', 'poll'):
+        if message['kind'] in ('submit', 'poll', 'recover'):
             return packet(self.key, dict(result, kind='chat_result', id=identifier,
                                          at=int(time.time())), CHAT_PREFIX)
         sync = message['kind'] == 'sync'
         return packet(self.key, {'kind': 'sync_result' if sync else 'result', 'id': identifier,
                                 'at': int(time.time()), **result}, SYNC_PREFIX if sync else PREFIX)
+
+
+class RelayClient:
+    """Keep-alive, outbound mTLS long-poll; never replay a delivered UI request."""
+    def __init__(self, config):
+        path = Path(config)
+        if path.is_symlink() or path.stat().st_uid != os.getuid() or path.stat().st_mode & 0o077:
+            raise ValueError('Relay client configuration must be private')
+        value = json.loads(path.read_text())
+        endpoint = urlsplit(value['endpoint'])
+        address = ipaddress.ip_address(endpoint.hostname)
+        if (endpoint.scheme != 'https' or endpoint.username or endpoint.password
+                or endpoint.query or endpoint.fragment or endpoint.path not in ('', '/')
+                or address not in ipaddress.ip_network('100.64.0.0/10')):
+            raise ValueError('Relay endpoint must be the paired exact Tailscale IPv4 address')
+        self.host, self.port = endpoint.hostname, endpoint.port or 443
+        self.fingerprint = value['server_fingerprint']
+        if not re.fullmatch('[a-f0-9]{64}', self.fingerprint):
+            raise ValueError('Invalid relay certificate pin')
+        self.context = ssl.create_default_context(cafile=value['ca'])
+        self.context.load_cert_chain(value['cert'], value['key'])
+        self.connection = None
+
+    def close(self):
+        if self.connection:
+            self.connection.close()
+        self.connection = None
+
+    def exchange(self, result):
+        if self.connection is None:
+            self.connection = http.client.HTTPSConnection(self.host, self.port, context=self.context, timeout=25)
+            self.connection.connect()
+            if hashlib.sha256(self.connection.sock.getpeercert(binary_form=True)).hexdigest() != self.fingerprint:
+                self.close()
+                raise ValueError('Relay server identity changed')
+        self.connection.request('POST', '/v1/input-relay', json.dumps(result), {'Content-Type': 'application/json'})
+        response = self.connection.getresponse()
+        raw = response.read(300001)
+        if response.status != 200 or len(raw) > 300000:
+            raise ValueError('Relay unavailable or response too large')
+        message = json.loads(raw)
+        if message.get('packet'):
+            if (not isinstance(message['packet'], str) or len(message['packet']) > MAX_PACKET
+                    or not all(re.fullmatch('[a-f0-9]{32}', message.get(k, '')) for k in ('session', 'ticket'))):
+                raise ValueError('Invalid relay delivery')
+        return message
+
+
+def relay_receive(receiver, config):
+    client = RelayClient(config)
+    result = {}
+    while True:
+        try:
+            delivery = client.exchange(result)
+            result = {}
+            if not delivery.get('packet'):
+                continue
+            answer = receiver.receive(delivery['packet'])
+            if answer:
+                result = {'session': delivery['session'], 'ticket': delivery['ticket'], 'packet': answer}
+        except (ValueError, KeyError, TypeError, OSError, http.client.HTTPException):
+            # Both request delivery and acknowledgement may be unknown. Reopen
+            # the transport, never re-run input or retry an old result packet.
+            result = {}
+            client.close()
+            time.sleep(1)
 
 
 def main():
@@ -552,10 +733,16 @@ def main():
         raise ValueError('Bridge state directory must be private')
     with (directory / 'receiver.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        replies = ReplyWatch(tools[0])
+        relay_config = json.loads(Path(args.config).read_text()).get('relay_client_config')
+        if relay_config:
+            tools = (*tools[:3], lambda node, text, expected='': paste_primary_prompt(node, text, expected, read=tools[2]))
+        replies = ReplyWatch(tools[0], submit=lambda node, text: submit_prompt(node, text, read=tools[2]))
         receiver = Receiver(load_key(args.config), directory / 'seen.json',
                             lambda text: fill_prompt(text, *tools),
                             DraftSync(*tools, validate=valid_atspi_prompt, submit=replies.dispatch), replies)
+        if relay_config:
+            relay_receive(receiver, relay_config)
+            return
         while True:
             try:
                 raw = clipboard_read()

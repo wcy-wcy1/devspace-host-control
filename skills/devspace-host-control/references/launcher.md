@@ -66,7 +66,7 @@ adding GPU-disabling startup flags or changing desktop effects automatically.
 
 For a Windows text box that fills the remote Claude draft, follow
 [input-bridge.md](input-bridge.md). It adds a separate `Claude-Input.cmd` entry
-after explicit pairing. Keep text clipboard enabled and RDP connected. The panel
+after explicit pairing. Keep RDP connected. Prefer the optional input relay over the existing mTLS agent port; only the legacy transport needs text clipboard enabled. The panel
 only submits on explicit Enter/Send and displays the corresponding latest reply.
 Ordinary typing only updates the owned draft; a new connection cannot replace
 existing nonempty input. Shift+Enter inserts a newline.

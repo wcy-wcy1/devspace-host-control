@@ -1,7 +1,16 @@
 ﻿param([Parameter(Mandatory=$true)][string]$PrivateDirectory,
-      [Parameter(Mandatory=$true)][string]$LauncherDirectory)
+      [Parameter(Mandatory=$true)][string]$LauncherDirectory,
+      [string]$AgentConfig)
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Security
+if($AgentConfig){
+    $agentPath=(Resolve-Path -LiteralPath $AgentConfig).Path
+    $agent=Get-Content -LiteralPath $agentPath -Raw -Encoding UTF8|ConvertFrom-Json
+    $agent|Add-Member -NotePropertyName input_relay_state -NotePropertyValue (Join-Path ([IO.Path]::GetFullPath($PrivateDirectory)) 'relay-state.dpapi') -Force
+    Copy-Item -LiteralPath $agentPath -Destination ($agentPath+'.before-input-relay-'+[Guid]::NewGuid().ToString('N'))
+    [IO.File]::WriteAllText($agentPath,($agent|ConvertTo-Json -Depth 10),[Text.UTF8Encoding]::new($false))
+    Write-Output 'Configured the optional relay. Restart the updated Windows agent before starting the paired Linux relay receiver.'
+}
 New-Item -ItemType Directory -Force -Path $PrivateDirectory | Out-Null
 $keyFile=Join-Path $PrivateDirectory 'input-key.dpapi'
 if (-not (Test-Path -LiteralPath $keyFile)) {

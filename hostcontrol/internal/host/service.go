@@ -67,10 +67,14 @@ type Service struct {
 	audit      *log.Logger
 	configPath string
 	configHash [32]byte
+	input      *inputRelay
 }
 
 func NewService(c Config) (*Service, error) {
 	s := &Service{cfg: c, cache: map[string]cached{}, tasks: map[string]*Task{}}
+	if c.InputRelayState != "" {
+		s.input = newInputRelay()
+	}
 	if _, e := os.Stat(s.revocationPath()); e == nil {
 		s.revoked = true
 	} else if !os.IsNotExist(e) {
@@ -111,6 +115,9 @@ func (s *Service) Pause(revoke bool) error {
 		s.revoked = true
 	}
 	s.mu.Unlock()
+	if s.input != nil {
+		s.input.close()
+	}
 	s.CancelTasks("session ended")
 	if revoke {
 		if e := writeNew(s.revocationPath(), []byte("revoked\n")); e != nil && !os.IsExist(e) {
@@ -247,6 +254,10 @@ func (s *Service) Handler() http.Handler {
 		ip, _, e := net.SplitHostPort(r.RemoteAddr)
 		if e != nil || canonicalIP(ip) != canonicalIP(s.cfg.PeerIP) || r.TLS == nil || len(r.TLS.PeerCertificates) == 0 || Fingerprint(r.TLS.PeerCertificates[0]) != s.cfg.PeerFingerprint || r.Header.Get("Origin") != "" {
 			http.Error(w, "forbidden", 403)
+			return
+		}
+		if r.URL.Path == "/v1/input-relay" {
+			s.remoteInput(w, r)
 			return
 		}
 		if r.URL.Path != "/v1/call" || r.Method != "POST" {
